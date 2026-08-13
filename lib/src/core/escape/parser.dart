@@ -450,7 +450,14 @@ class EscapeParser {
         case 21:
           handler.unsetCursorBold();
           continue;
+        // ECMA-48: "normal colour or normal intensity (neither bold nor
+        // faint)" — 22 ends BOTH, and is how a program actually leaves bold.
+        // Clearing only faint here strands the terminal in bold forever, since
+        // the 21 above means doubly-underlined on modern terminals and few
+        // programs emit it. Every subsequent line then renders bold until a
+        // full SGR 0 reset happens to arrive.
         case 22:
+          handler.unsetCursorBold();
           handler.unsetCursorFaint();
           continue;
         case 23:
