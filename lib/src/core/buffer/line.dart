@@ -332,15 +332,60 @@ class BufferLine with IndexedItem {
     }
 
     final builder = StringBuffer();
+
+    // Blank cells are COUNTED, not written, and flushed only once a real
+    // character follows. A run that turns out to be the row's unused tail is
+    // therefore never flushed, so a line still copies without padding out to
+    // the terminal's width — and it takes one pass to do both, with no second
+    // scan to locate where the content ends.
+    var pendingBlanks = 0;
+
+    // Carried rather than re-read: spotting a wide character's second cell
+    // needs the PREVIOUS cell's width, and this is a hot path — getText walks
+    // every cell of a scrollback that can run to tens of thousands of lines.
+    var previousWidth = from > 0 ? getWidth(from - 1) : 0;
+
     for (var i = from; i < to; i++) {
       final codePoint = getCodePoint(i);
       final width = getWidth(i);
-      if (codePoint != 0 && i + width <= to) {
+
+      // The SECOND half of a wide character (an emoji, a CJK glyph) reads as 0
+      // because one code point spans two cells. It is not a gap and adds
+      // nothing — the character was already emitted from the cell before it.
+      final isWideCharTail = previousWidth == 2;
+
+      previousWidth = width;
+
+      if (isWideCharTail) {
+        continue;
+      }
+
+      // A cell that was never written reads as 0 as well, and DISPLAYS as a
+      // blank, so between two written cells it has to copy as one: full-screen
+      // programs lay out by MOVING THE CURSOR rather than writing padding
+      // spaces, which leaves untouched cells sitting between the words.
+      // Dropping them closes the gap and silently rewrites the text —
+      // "cmd -r123" comes back as "cmd-r123", a different command.
+      if (codePoint == 0) {
+        pendingBlanks++;
+
+        continue;
+      }
+
+      if (i + width <= to) {
+        if (pendingBlanks > 0) {
+          builder.write(' ' * pendingBlanks);
+
+          pendingBlanks = 0;
+        }
+
         builder.writeCharCode(codePoint);
       }
     }
 
-    return builder.toString();
+    final text = builder.toString();
+
+    return text;
   }
 
   CellAnchor createAnchor(int offset) {
