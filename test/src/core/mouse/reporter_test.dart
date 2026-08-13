@@ -37,6 +37,32 @@ void main() {
       expect(output, equals('\x1B[<0;1;1M'));
     });
 
+    // Wheel buttons are X buttons 4-7, but they report as buttons 1-4 (0-3)
+    // with 64 added — so wheel up is 64. Adding 64 to the raw button number
+    // gives 68, which sets bit 4: the SHIFT modifier. Programs then read
+    // "wheel with Shift held" and never scroll.
+    test('report() encodes wheel up as button 64, not 68', () {
+      final output = MouseReporter.report(
+        TerminalMouseButton.wheelUp,
+        TerminalMouseButtonState.down,
+        CellOffset(0, 0),
+        MouseReportMode.sgr,
+      );
+
+      expect(output, equals('\x1B[<64;1;1M'));
+    });
+
+    test('report() encodes wheel down as button 65', () {
+      final output = MouseReporter.report(
+        TerminalMouseButton.wheelDown,
+        TerminalMouseButtonState.down,
+        CellOffset(0, 0),
+        MouseReportMode.sgr,
+      );
+
+      expect(output, equals('\x1B[<65;1;1M'));
+    });
+
     test('report() supports urxvt mode', () {
       final output = MouseReporter.report(
         TerminalMouseButton.left,
