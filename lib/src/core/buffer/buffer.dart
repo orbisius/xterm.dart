@@ -236,7 +236,7 @@ class Buffer {
     if (isInVerticalMargin) {
       if (_cursorY == _marginBottom) {
         if (marginTop == 0 && !isAltBuffer) {
-          lines.insert(absoluteMarginBottom + 1, _newEmptyLine());
+          _addBlankLine(absoluteMarginBottom + 1);
         } else {
           scrollUp(1);
         }
@@ -252,7 +252,7 @@ class Buffer {
       if (isAltBuffer) {
         scrollUp(1);
       } else {
-        lines.push(_newEmptyLine());
+        _addBlankLine(lines.length);
       }
     } else {
       // there're still lines so we simply move cursor down.
@@ -495,6 +495,28 @@ class Buffer {
   BufferLine _newEmptyLine([int? width]) {
     final line = BufferLine(width ?? viewWidth);
     return line;
+  }
+
+  /// Adds a blank line at [index], reusing the line that addition evicts once
+  /// the scrollback is full.
+  ///
+  /// This is the line-feed path, so it runs once per line of program output.
+  /// A full scrollback drops one line for every line it keeps, so allocating a
+  /// [BufferLine] here means allocating its [Uint32List] for every line of
+  /// output and immediately discarding the one that scrolls off. Reuse is
+  /// possible only when the new line goes at the END, which is where a line
+  /// feed puts it: the evicted line is then the one already sitting in the
+  /// slot being written, so it costs nothing to find.
+  void _addBlankLine(int index) {
+    if (!lines.isFull || index != lines.length) {
+      lines.insert(index, _newEmptyLine());
+      return;
+    }
+
+    final evicted = lines[0];
+    evicted.reset(viewWidth);
+
+    lines.insert(index, evicted);
   }
 
   static final defaultWordSeparators = <int>{

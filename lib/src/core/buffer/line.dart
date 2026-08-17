@@ -132,6 +132,27 @@ class BufferLine with IndexedItem {
     _data[offset + _cellContent] = 0;
   }
 
+  /// Blanks the whole line so it can be reused in place of a freshly allocated
+  /// one, saving the [Uint32List] that a new [BufferLine] would allocate.
+  ///
+  /// Anchors are disposed rather than carried over: they refer to the content
+  /// being discarded, and leaving them attached would silently repoint them at
+  /// whatever is written next.
+  void reset(int length) {
+    while (_anchors.isNotEmpty) {
+      _anchors.last.dispose();
+    }
+
+    resize(length);
+
+    // The whole backing store, not just the first [length] cells: capacity is
+    // rounded up past the line length, and [getTrimmedLength] reads to capacity
+    // when it is called without a column count.
+    _data.fillRange(0, _data.length, 0);
+
+    isWrapped = false;
+  }
+
   /// Erase cells whose index satisfies [start] <= index < [end]. Erased cells
   /// are filled with [style].
   void eraseRange(int start, int end, CursorStyle style) {
