@@ -263,12 +263,20 @@ class IndexAwareCircularBuffer<T extends IndexedItem> {
       _dropChild(i);
     }
 
+    // BEFORE adopting, not after: _adoptChild places an item at
+    // (_startIndex + index), so storing with the old start and then resetting it
+    // puts every item somewhere the reads never look. On a buffer that has
+    // evicted — start index no longer 0 — a shorter replacement then leaves
+    // holes, and reading one throws; an exactly-full replacement hides it as a
+    // silently shuffled scrollback. Reflow is the caller, so it surfaced as a
+    // crash when a font change resized the terminal.
+    _startIndex = 0;
+
     final copyLength = replacement.length - copyStart;
     for (var i = 0; i < copyLength; i++) {
       _adoptChild(i, replacement[copyStart + i]);
     }
 
-    _startIndex = 0;
     _length = copyLength;
   }
 
