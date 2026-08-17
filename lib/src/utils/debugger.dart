@@ -89,6 +89,17 @@ class _TerminalDebuggerHandler implements EscapeHandler {
     onCommand('writeChar(${String.fromCharCode(char)})');
   }
 
+  @override
+  int writeChars(List<int> chars, int start, int end) {
+    // Reported one at a time: a debug trace wants the same shape whether or not
+    // the parser happened to batch the run.
+    for (var index = start; index < end; index++) {
+      writeChar(chars[index]);
+    }
+
+    return end - start;
+  }
+
   /* SBC */
 
   @override

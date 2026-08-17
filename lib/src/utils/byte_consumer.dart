@@ -43,6 +43,47 @@ class ByteConsumer {
     return data[_currentOffset++];
   }
 
+  /// The block being consumed, so a caller can scan a run of bytes in one pass
+  /// instead of paying [consume] per byte. Empty when nothing is pending.
+  ///
+  /// Retires finished blocks first: a block is only dropped when the next byte
+  /// is asked for, so until then the offset can sit past its end.
+  List<int> get pendingBlock {
+    _retireFinishedBlocks();
+
+    if (_queue.isEmpty) {
+      return const <int>[];
+    }
+
+    return _queue.first;
+  }
+
+  /// Where in [pendingBlock] the next byte sits.
+  int get pendingOffset => _currentOffset;
+
+  /// Consumes [count] bytes the caller has already read from [pendingBlock].
+  ///
+  /// Bounded to that block on purpose — crossing into the next one is what
+  /// [consume] is for, and rollback bookkeeping depends on blocks being retired
+  /// in order.
+  void skip(int count) {
+    assert(count >= 0);
+    assert(_queue.isNotEmpty);
+    assert(_currentOffset + count <= _queue.first.length);
+
+    _currentOffset += count;
+    _length -= count;
+    _totalConsumed += count;
+  }
+
+  void _retireFinishedBlocks() {
+    while (_queue.isNotEmpty && _currentOffset >= _queue.first.length) {
+      final finished = _queue.removeFirst();
+      _consumed.add(finished);
+      _currentOffset -= finished.length;
+    }
+  }
+
   /// Rolls back the last [n] call.
   void rollback([int n = 1]) {
     _currentOffset -= n;
