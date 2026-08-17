@@ -244,4 +244,90 @@ void main() {
       expect(terminal.buffer.lines[2].toString(), '');
     });
   });
+
+  group('scrollback recycling', () {
+    /// A terminal whose scrollback is already full, so the next line feed is
+    /// the one that evicts.
+    Terminal buildFilledTerminal({required int maxLines}) {
+      final terminal = Terminal(maxLines: maxLines);
+      terminal.resize(20, 24);
+
+      while (terminal.buffer.lines.length < maxLines) {
+        terminal.write('fill\r\n');
+      }
+
+      return terminal;
+    }
+
+    test('reuses the evicted line object once the scrollback is full', () {
+      final terminal = buildFilledTerminal(maxLines: 30);
+
+      final oldest = terminal.buffer.lines[0];
+
+      terminal.write('overflow\r\n');
+
+      final newest = terminal.buffer.lines[terminal.buffer.lines.length - 1];
+      expect(identical(newest, oldest), isTrue);
+    });
+
+    test('a recycled line shows none of the content it held', () {
+      final terminal = Terminal(maxLines: 30);
+      terminal.resize(20, 24);
+
+      terminal.write('a very long first line\r\n');
+
+      // Enough to walk the cursor to the bottom, fill the scrollback, and then
+      // keep evicting: a line feed only adds a line once the cursor is at the
+      // last row.
+      for (var i = 1; i <= 60; i++) {
+        terminal.write('x$i\r\n');
+      }
+
+      expect(terminal.buffer.getText(), isNot(contains('very long')));
+
+      for (final line in terminal.buffer.lines.toList()) {
+        expect(line.getTrimmedLength(), lessThanOrEqualTo(3));
+      }
+    });
+
+    test('drops the anchors of the line it recycles', () {
+      final terminal = Terminal(maxLines: 30);
+      terminal.resize(20, 24);
+
+      terminal.write('anchored\r\n');
+
+      final anchor = terminal.buffer.lines[0].createAnchor(0);
+      expect(anchor.attached, isTrue);
+
+      // Enough to walk the cursor to the bottom, fill the scrollback, and then
+      // keep evicting: a line feed only adds a line once the cursor is at the
+      // last row.
+      for (var i = 1; i <= 60; i++) {
+        terminal.write('x$i\r\n');
+      }
+
+      // Same outcome as before recycling, when the evicted line was simply
+      // dropped: an anchor whose content has scrolled out of history is no
+      // longer attached to anything.
+      expect(anchor.attached, isFalse);
+    });
+
+    test('keeps the visible text correct across many evictions', () {
+      final terminal = Terminal(maxLines: 30);
+      terminal.resize(20, 24);
+
+      for (var i = 1; i <= 200; i++) {
+        terminal.write('row$i\r\n');
+      }
+
+      final writtenLines = terminal.buffer
+          .getText()
+          .split('\n')
+          .where((line) => line.isNotEmpty)
+          .toList();
+
+      expect(writtenLines.last, 'row200');
+      expect(writtenLines.length, greaterThan(1));
+    });
+  });
 }
