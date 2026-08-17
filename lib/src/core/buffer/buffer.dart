@@ -130,6 +130,47 @@ class Buffer {
     }
   }
 
+  /// Writes [chars] from [start] until [end] as plain single-cell characters,
+  /// resolving the line, the style and the wrap check ONCE for the whole run
+  /// rather than once per character.
+  ///
+  /// Per character, [writeChar] translates a charset, measures a width, checks
+  /// the margin and looks the current line up through the scrollback's index
+  /// arithmetic. None of that varies inside a run that stays on one line, and
+  /// bulk output is almost entirely such runs.
+  ///
+  /// Returns how many were written, which is short of the run when it reaches
+  /// the right margin, and zero when the run cannot be written this way at all
+  /// — a translating charset is active, or the cursor is already at the margin
+  /// with a wrap pending. The caller writes the rest through [writeChar].
+  int writeChars(List<int> chars, int start, int end) {
+    if (!charset.isAscii) {
+      return 0;
+    }
+
+    if (_cursorX >= terminal.viewWidth) {
+      return 0;
+    }
+
+    final roomOnLine = viewWidth - _cursorX;
+    var writeCount = end - start;
+
+    if (writeCount > roomOnLine) {
+      writeCount = roomOnLine;
+    }
+
+    final line = currentLine;
+    final style = terminal.cursor;
+
+    for (var offset = 0; offset < writeCount; offset++) {
+      line.setCell(_cursorX + offset, chars[start + offset], 1, style);
+    }
+
+    _cursorX += writeCount;
+
+    return writeCount;
+  }
+
   /// The line at the current cursor position.
   BufferLine get currentLine {
     return lines[absoluteCursorY];

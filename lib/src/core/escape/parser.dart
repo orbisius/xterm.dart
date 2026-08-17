@@ -31,9 +31,21 @@ class EscapeParser {
     _process();
   }
 
+  /// The characters a run may contain: printable 7-bit ASCII. Every one is a
+  /// single cell, none is an escape or a control code, and none is touched by a
+  /// charset — which is what makes a whole run writable in one go.
+  static const _plainRunFirstChar = 0x20;
+
+  static const _plainRunLastChar = 0x7e;
+
   void _process() {
     while (_queue.isNotEmpty) {
       tokenBegin = _queue.totalConsumed;
+
+      if (_processPlainRun() > 0) {
+        continue;
+      }
+
       final char = _queue.consume();
 
       if (char == Ascii.ESC) {
@@ -46,6 +58,43 @@ class EscapeParser {
         _processChar(char);
       }
     }
+  }
+
+  /// Hands the handler the run of plain characters at the head of the queue.
+  ///
+  /// Returns how many it took. Zero means there is no run to take, or the
+  /// handler declined it, and the caller must fall back to consuming one
+  /// character at a time — which is also what keeps this from looping: a
+  /// declined run always ends up on the per-character path.
+  int _processPlainRun() {
+    final block = _queue.pendingBlock;
+    final start = _queue.pendingOffset;
+
+    var end = start;
+
+    while (end < block.length) {
+      final char = block[end];
+
+      if (char < _plainRunFirstChar || char > _plainRunLastChar) {
+        break;
+      }
+
+      end++;
+    }
+
+    if (end == start) {
+      return 0;
+    }
+
+    final written = handler.writeChars(block, start, end);
+
+    if (written <= 0) {
+      return 0;
+    }
+
+    _queue.skip(written);
+
+    return written;
   }
 
   void _processChar(int char) {

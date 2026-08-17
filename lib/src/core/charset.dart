@@ -22,6 +22,14 @@ class Charset {
     return _cached(codePoint);
   }
 
+  /// Whether [translate] currently returns its argument unchanged, so a caller
+  /// with a run of ASCII can skip translating it character by character.
+  bool get isAscii {
+    final untranslated = identical(_cached, asciiTranslator);
+
+    return untranslated;
+  }
+
   void designate(int index, int name) {
     final charset = _charsets[name];
     if (charset != null) {

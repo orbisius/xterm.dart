@@ -3,6 +3,15 @@ import 'package:xterm/src/core/mouse/mode.dart';
 abstract class EscapeHandler {
   void writeChar(int char);
 
+  /// Writes [chars] from [start] until [end] — every one of them a plain
+  /// single-cell character, which is what lets a handler write the whole run
+  /// with one set of checks instead of repeating them per character.
+  ///
+  /// Returns how many were written. A handler may take fewer than offered, or
+  /// none at all, whenever the run cannot be written that way — the caller
+  /// falls back to [writeChar] for the remainder.
+  int writeChars(List<int> chars, int start, int end);
+
   /* SBC */
 
   void bell();

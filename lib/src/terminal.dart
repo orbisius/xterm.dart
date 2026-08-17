@@ -389,6 +389,19 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
     _buffer.writeChar(char);
   }
 
+  @override
+  int writeChars(List<int> chars, int start, int end) {
+    final written = _buffer.writeChars(chars, start, end);
+
+    if (written > 0) {
+      // The LAST one written, so a repeat sequence that follows the run repeats
+      // the same character it would have after single writes.
+      _precedingCodepoint = chars[start + written - 1];
+    }
+
+    return written;
+  }
+
   /* SBC */
 
   @override
