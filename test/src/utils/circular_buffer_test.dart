@@ -399,4 +399,43 @@ void main() {
       expect(item0.attached, false);
     });
   });
+
+  group('replaceWith after the buffer has wrapped', () {
+    test('every index reads back the item that was put there', () {
+      // A buffer that has evicted has a start index other than 0, and
+      // replaceWith resets it to 0 — so anything it stored relative to the OLD
+      // start ends up somewhere the reads never look. Reflow is what calls this,
+      // which is why it surfaces as a crash on a font-size change.
+      final list = IndexAwareCircularBuffer<IndexedValue<int>>(5);
+
+      for (var value = 0; value < 8; value++) {
+        list.push(value.indexed);
+      }
+
+      list.replaceWith([100.indexed, 101.indexed, 102.indexed]);
+
+      expect(list.length, 3);
+      expect(list[0].value, 100);
+      expect(list[1].value, 101);
+      expect(list[2].value, 102);
+    });
+
+    test('a full replacement is in the right ORDER, not merely present', () {
+      // The same fault with nothing missing: when the replacement fills every
+      // slot there is no null to crash on, so the damage is silent — the
+      // scrollback comes back shuffled.
+      final list = IndexAwareCircularBuffer<IndexedValue<int>>(4);
+
+      for (var value = 0; value < 7; value++) {
+        list.push(value.indexed);
+      }
+
+      list.replaceWith([10.indexed, 11.indexed, 12.indexed, 13.indexed]);
+
+      expect(list[0].value, 10);
+      expect(list[1].value, 11);
+      expect(list[2].value, 12);
+      expect(list[3].value, 13);
+    });
+  });
 }
