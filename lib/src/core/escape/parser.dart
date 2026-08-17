@@ -1091,6 +1091,14 @@ class EscapeParser {
           handler.useAltBuffer();
         } else {
           handler.useMainBuffer();
+
+          // 1049 is 1047 plus 1048, so the reset arm owes the restore its set
+          // arm's saveCursor promised. It carries the text attributes and the
+          // charset, not just the position: without it, a program that exits
+          // with underline or bold still on leaves the shell drawing in it.
+          // Restored AFTER the switch, so the position lands in the buffer it
+          // was saved from.
+          handler.restoreCursor();
         }
         return;
       case 2004:
