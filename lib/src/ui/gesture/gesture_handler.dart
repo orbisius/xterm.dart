@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
+import 'package:xterm/src/core/buffer/cell_offset.dart';
 import 'package:xterm/src/core/mouse/button.dart';
 import 'package:xterm/src/core/mouse/button_state.dart';
 import 'package:xterm/src/terminal_view.dart';
@@ -55,7 +56,13 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
 
   RenderTerminal get renderTerminal => terminalView.renderTerminal;
 
-  DragStartDetails? _lastDragStartDetails;
+  /// The buffer cell the current drag started on, resolved ONCE when the drag
+  /// began.
+  ///
+  /// A cell rather than the start's view-local offset, because that offset names
+  /// a different cell once the view has scrolled — an anchor recovered from it
+  /// would drag the selection along with the viewport.
+  CellOffset? _dragAnchor;
 
   LongPressStartDetails? _lastLongPressStartDetails;
 
@@ -175,7 +182,7 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
   // void onLongPressUp() {}
 
   void onDragStart(DragStartDetails details) {
-    _lastDragStartDetails = details;
+    _dragAnchor = renderTerminal.getCellOffset(details.localPosition);
 
     details.kind == PointerDeviceKind.mouse
         ? renderTerminal.selectCharacters(details.localPosition)
@@ -183,9 +190,12 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
   }
 
   void onDragUpdate(DragUpdateDetails details) {
-    renderTerminal.selectCharacters(
-      _lastDragStartDetails!.localPosition,
-      details.localPosition,
-    );
+    final anchor = _dragAnchor;
+
+    if (anchor == null) {
+      return;
+    }
+
+    renderTerminal.selectCharactersFrom(anchor, details.localPosition);
   }
 }
