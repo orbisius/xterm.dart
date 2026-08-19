@@ -206,7 +206,7 @@ class EscapeParser {
 
   /// The last parsed [_Csi]. This is a mutable singletion by design to reduce
   /// object allocations.
-  final _csi = _Csi(finalByte: 0, params: []);
+  final _csi = _Csi(finalByte: 0, params: [], subParams: []);
 
   /// Parse a CSI from the head of the queue. Return false if the CSI isn't
   /// complete. After a CSI is successfully parsed, [_csi] is updated.
@@ -216,6 +216,7 @@ class EscapeParser {
     }
 
     _csi.params.clear();
+    _csi.subParams.clear();
 
     // test whether the csi is a `CSI ? Ps ...` or `CSI Ps ...`
     final prefix = _queue.peek();
@@ -228,6 +229,12 @@ class EscapeParser {
 
     var param = 0;
     var hasParam = false;
+
+    // The sub-parameters of the parameter being read, and whether the digits
+    // arriving now belong to one. Both reset at every `;`.
+    var subValues = <int>[];
+    var readingSubParam = false;
+
     while (true) {
       // The sequence isn't completed, just ignore it.
       if (_queue.isEmpty) {
@@ -239,15 +246,41 @@ class EscapeParser {
       if (char == Ascii.semicolon) {
         if (hasParam) {
           _csi.params.add(param);
+          _csi.subParams.add(subValues);
+          subValues = <int>[];
         }
         param = 0;
+        readingSubParam = false;
+        continue;
+      }
+
+      // ECMA-48 / ITU-T T.416 sub-parameter separator. Without this branch a
+      // colon matches none of the cases here and is simply skipped, so the
+      // digits after it are appended to the parameter BEFORE it — `4:0`
+      // ("underline off") is read as SGR 40 and the underline is never cleared.
+      if (char == Ascii.colon) {
+        hasParam = true;
+        readingSubParam = true;
+
+        // An omitted sub-value is zero, which is what the colour form
+        // `38:2::255:0:0` relies on to hold the colour-space slot.
+        subValues.add(0);
         continue;
       }
 
       if (char >= Ascii.num0 && char <= Ascii.num9) {
         hasParam = true;
+
+        final digit = char - Ascii.num0;
+
+        if (readingSubParam) {
+          final last = subValues.length - 1;
+          subValues[last] = subValues[last] * 10 + digit;
+          continue;
+        }
+
         param *= 10;
-        param += char - Ascii.num0;
+        param += digit;
         continue;
       }
 
@@ -259,12 +292,29 @@ class EscapeParser {
       if (char >= Ascii.atSign && char <= Ascii.tilde) {
         if (hasParam) {
           _csi.params.add(param);
+          _csi.subParams.add(subValues);
         }
 
         _csi.finalByte = char;
         return true;
       }
     }
+  }
+
+  /// The first sub-parameter of the parameter at [index], or null when that
+  /// parameter was written without a colon.
+  int? _firstSubParam(int index) {
+    if (index >= _csi.subParams.length) {
+      return null;
+    }
+
+    final subValues = _csi.subParams[index];
+
+    if (subValues.isEmpty) {
+      return null;
+    }
+
+    return subValues.first;
   }
 
   late final _csiHandlers = FastLookupTable<_CsiHandler>({
@@ -432,6 +482,19 @@ class EscapeParser {
           handler.setCursorItalic();
           continue;
         case 4:
+          // `4` alone underlines. A sub-parameter selects a STYLE — `4:1`
+          // single, `4:2` double, `4:3` curly, `4:4` dotted, `4:5` dashed — and
+          // `4:0` ends underlining, the same as SGR 24.
+          //
+          // Only the underline FLAG is modelled here, so every style sets it;
+          // what matters is that `4:0` CLEARS it. A program that turns
+          // underlining off the modern way would otherwise leave every line
+          // drawn afterwards underlined, with no way back short of a full reset.
+          if (_firstSubParam(i) == 0) {
+            handler.unsetCursorUnderline();
+            continue;
+          }
+
           handler.setCursorUnderline();
           continue;
         case 5:
@@ -497,21 +560,7 @@ class EscapeParser {
           handler.setForegroundColor16(NamedColor.white);
           continue;
         case 38:
-          final mode = params[i + 1];
-          switch (mode) {
-            case 2:
-              final r = params[i + 2];
-              final g = params[i + 3];
-              final b = params[i + 4];
-              handler.setForegroundColorRgb(r, g, b);
-              i += 4;
-              break;
-            case 5:
-              final index = params[i + 2];
-              handler.setForegroundColor256(index);
-              i += 2;
-              break;
-          }
+          i = _applyExtendedColor(index: i, foreground: true);
           continue;
         case 39:
           handler.resetForeground();
@@ -542,21 +591,7 @@ class EscapeParser {
           handler.setBackgroundColor16(NamedColor.white);
           continue;
         case 48:
-          final mode = params[i + 1];
-          switch (mode) {
-            case 2:
-              final r = params[i + 2];
-              final g = params[i + 3];
-              final b = params[i + 4];
-              handler.setBackgroundColorRgb(r, g, b);
-              i += 4;
-              break;
-            case 5:
-              final index = params[i + 2];
-              handler.setBackgroundColor256(index);
-              i += 2;
-              break;
-          }
+          i = _applyExtendedColor(index: i, foreground: false);
           continue;
         case 49:
           handler.resetBackground();
@@ -616,6 +651,119 @@ class EscapeParser {
           handler.unsupportedStyle(param);
           continue;
       }
+    }
+  }
+
+  /// Applies the extended-colour selector (SGR 38 / 48) that starts at [index],
+  /// and returns the index of the LAST parameter it consumed so the caller's
+  /// loop resumes after it.
+  ///
+  /// Both spellings are accepted. `38;5;196` spreads the parts across the
+  /// parameters that FOLLOW, while `38:5:196` carries them as SUB-parameters of
+  /// this one. A truncated sequence applies nothing rather than reading past the
+  /// end of the list.
+  int _applyExtendedColor({required int index, required bool foreground}) {
+    final subValues = _csi.subParams[index];
+
+    if (subValues.isNotEmpty) {
+      _applyColorValues(values: subValues, foreground: foreground);
+      return index;
+    }
+
+    final params = _csi.params;
+
+    if (index + 1 >= params.length) {
+      return index;
+    }
+
+    final mode = params[index + 1];
+
+    if (mode == 2) {
+      if (index + 4 >= params.length) {
+        return index;
+      }
+
+      final values = [
+        mode,
+        params[index + 2],
+        params[index + 3],
+        params[index + 4],
+      ];
+
+      _applyColorValues(values: values, foreground: foreground);
+
+      return index + 4;
+    }
+
+    if (mode == 5) {
+      if (index + 2 >= params.length) {
+        return index;
+      }
+
+      final values = [mode, params[index + 2]];
+
+      _applyColorValues(values: values, foreground: foreground);
+
+      return index + 2;
+    }
+
+    return index;
+  }
+
+  /// Applies one colour selector. [values] is `[mode, ...]` however it was
+  /// written: `2, r, g, b` for direct colour or `5, index` for the 256-colour
+  /// palette.
+  ///
+  /// The colon form may carry an extra colour-space id after the mode, which is
+  /// normally EMPTY (`38:2::255:0:0`) and is ignored — its presence is what the
+  /// component offset is taken from.
+  void _applyColorValues({
+    required List<int> values,
+    required bool foreground,
+  }) {
+    if (values.isEmpty) {
+      return;
+    }
+
+    final mode = values.first;
+
+    if (mode == 2) {
+      var offset = 1;
+
+      if (values.length >= 5) {
+        offset = 2;
+      }
+
+      if (values.length < offset + 3) {
+        return;
+      }
+
+      final r = values[offset];
+      final g = values[offset + 1];
+      final b = values[offset + 2];
+
+      if (foreground) {
+        handler.setForegroundColorRgb(r, g, b);
+        return;
+      }
+
+      handler.setBackgroundColorRgb(r, g, b);
+      return;
+    }
+
+    if (mode == 5) {
+      if (values.length < 2) {
+        return;
+      }
+
+      final colorIndex = values[1];
+
+      if (foreground) {
+        handler.setForegroundColor256(colorIndex);
+        return;
+      }
+
+      handler.setBackgroundColor256(colorIndex);
     }
   }
 
@@ -1128,6 +1276,7 @@ class EscapeParser {
 class _Csi {
   _Csi({
     required this.params,
+    required this.subParams,
     required this.finalByte,
     // required this.intermediates,
   });
@@ -1135,6 +1284,13 @@ class _Csi {
   int? prefix;
 
   List<int> params;
+
+  /// The sub-parameters of each entry in [params], parallel to it: `4:0` gives
+  /// `params == [4]` and `subParams == [[0]]`.
+  ///
+  /// Empty for a parameter written without a colon, which is every parameter in
+  /// the sequences most programs send.
+  List<List<int>> subParams;
 
   int finalByte;
   // final List<int> intermediates;
