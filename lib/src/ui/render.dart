@@ -281,6 +281,19 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
   /// least one cell is selected even if [from] and [to] are same.
   void selectCharacters(Offset from, [Offset? to]) {
     final fromPosition = getCellOffset(from);
+    selectCharactersFrom(fromPosition, to);
+  }
+
+  /// Selects characters from the buffer cell [fromPosition] to the cell under
+  /// [to]. At least one cell is selected even if the two resolve to the same.
+  ///
+  /// The overload that takes a start [Offset] resolves it against the CURRENT
+  /// scroll offset (see [getCellOffset]), so a caller that extends one selection
+  /// over several updates — a drag — must resolve the start ONCE and pass the
+  /// cell back here. Re-resolving the same view-local offset after the view has
+  /// scrolled yields a different cell, which moves the anchor with the viewport
+  /// and slides the whole selection instead of growing it.
+  void selectCharactersFrom(CellOffset fromPosition, [Offset? to]) {
     if (to == null) {
       _controller.setSelection(
         _terminal.buffer.createAnchorFromOffset(fromPosition),
