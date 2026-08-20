@@ -107,11 +107,8 @@ void main() {
   testWidgets('a drag keeps its anchor when the scrollback evicts', (
     tester,
   ) async {
-    // Small enough that a modest burst of output reaches the cap and starts
-    // dropping lines.
+    // Small enough to fill quickly; nothing below assumes a particular value.
     const maxLines = 60;
-    const linesBeforeDrag = 50;
-    const linesDuringDrag = 10;
 
     final terminal = Terminal(maxLines: maxLines);
     final controller = TerminalController();
@@ -139,11 +136,30 @@ void main() {
 
     terminal.resize(80, viewRows);
 
-    for (var lineNumber = 0; lineNumber < linesBeforeDrag; lineNumber++) {
-      terminal.write('before $lineNumber\r\n');
+    // FILL the scrollback rather than guessing a line count that reaches the
+    // cap. Only a full buffer evicts, and eviction is the whole subject here.
+    var writtenLines = 0;
+
+    while (terminal.buffer.lines.length < maxLines) {
+      terminal.write('before $writtenLines\r\n');
+      writtenLines++;
+
+      // The loop's exit depends on buffer behaviour, so bound it: a change there
+      // should fail this test, never hang the suite.
+      expect(
+        writtenLines,
+        lessThan(maxLines * 4),
+        reason: 'writing lines did not grow the buffer to its cap',
+      );
     }
 
     await tester.pump();
+
+    expect(
+      terminal.buffer.lines.length,
+      maxLines,
+      reason: 'the buffer must be FULL before the drag, or nothing evicts',
+    );
 
     final viewCenter = tester.getCenter(find.byType(TerminalView));
 
@@ -167,21 +183,33 @@ void main() {
       reason: 'the anchor should sit on a line with text on it',
     );
 
-    final lineCountBefore = terminal.buffer.lines.length;
+    final anchorRowBefore = anchorBefore?.y ?? 0;
 
-    // Output arrives mid-drag, exactly as it does in a live session.
-    for (var lineNumber = 0; lineNumber < linesDuringDrag; lineNumber++) {
+    // DERIVED from where the drag actually landed: evict half the rows above the
+    // anchor. Enough that every index below shifts measurably, few enough that
+    // the anchor's OWN line is never among the evicted — a detached anchor would
+    // test the give-up path instead of the tracking one.
+    final evictionCount = anchorRowBefore ~/ 2;
+
+    expect(
+      evictionCount,
+      greaterThan(0),
+      reason: 'the anchor needs rows above it for the writes to evict',
+    );
+
+    // Output arrives mid-drag, exactly as it does in a live session. The buffer
+    // is full, so each line written evicts exactly one and shifts every
+    // surviving row's index down by one.
+    for (var lineNumber = 0; lineNumber < evictionCount; lineNumber++) {
       terminal.write('during $lineNumber\r\n');
     }
 
     await tester.pump();
 
-    // Without eviction the row indices never shift, and the assertion below
-    // holds whether the anchor tracks its line or not.
     expect(
       terminal.buffer.lines.length,
-      lineCountBefore,
-      reason: 'the buffer must be AT its cap, so those writes evicted',
+      maxLines,
+      reason: 'a full buffer stays at its cap, so those writes evicted',
     );
 
     await gesture.moveBy(const Offset(20, 0));
@@ -189,9 +217,19 @@ void main() {
 
     final anchorAfter = controller.selection?.begin;
 
+    expect(anchorAfter, isNotNull);
+
+    // The EXACT shift, not "it moved": the line the anchor holds was pushed up
+    // by one per evicted line, so a tracking anchor reports precisely that. An
+    // anchor that kept a stale row number would report the row it started on.
+    expect(
+      anchorAfter?.y,
+      anchorRowBefore - evictionCount,
+      reason: 'the anchor row must follow its line up as the buffer evicts',
+    );
+
     final anchoredTextAfter = readLineText(terminal, anchorAfter);
 
-    expect(anchorAfter, isNotNull);
     expect(
       anchoredTextAfter,
       anchoredTextBefore,
