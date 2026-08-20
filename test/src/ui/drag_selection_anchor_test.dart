@@ -99,4 +99,119 @@ void main() {
 
     await gesture.up();
   });
+
+  // The second way a start position goes stale, and the one a plain CellOffset
+  // does NOT survive: a full scrollback evicts its oldest lines, which shifts
+  // every row index below them. A stored index then names a different line while
+  // pointing at the same number.
+  testWidgets('a drag keeps its anchor when the scrollback evicts', (
+    tester,
+  ) async {
+    // Small enough that a modest burst of output reaches the cap and starts
+    // dropping lines.
+    const maxLines = 60;
+    const linesBeforeDrag = 50;
+    const linesDuringDrag = 10;
+
+    final terminal = Terminal(maxLines: maxLines);
+    final controller = TerminalController();
+    final scrollController = ScrollController();
+
+    addTearDown(scrollController.dispose);
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 400,
+            height: 200,
+            child: TerminalView(
+              terminal,
+              controller: controller,
+              scrollController: scrollController,
+              autofocus: true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    terminal.resize(80, viewRows);
+
+    for (var lineNumber = 0; lineNumber < linesBeforeDrag; lineNumber++) {
+      terminal.write('before $lineNumber\r\n');
+    }
+
+    await tester.pump();
+
+    final viewCenter = tester.getCenter(find.byType(TerminalView));
+
+    final gesture = await tester.startGesture(
+      viewCenter,
+      kind: PointerDeviceKind.mouse,
+    );
+
+    await gesture.moveBy(const Offset(20, 0));
+    await tester.pump();
+
+    final anchorBefore = controller.selection?.begin;
+
+    expect(anchorBefore, isNotNull, reason: 'the drag should have selected');
+
+    final anchoredTextBefore = readLineText(terminal, anchorBefore);
+
+    expect(
+      anchoredTextBefore,
+      isNotEmpty,
+      reason: 'the anchor should sit on a line with text on it',
+    );
+
+    final lineCountBefore = terminal.buffer.lines.length;
+
+    // Output arrives mid-drag, exactly as it does in a live session.
+    for (var lineNumber = 0; lineNumber < linesDuringDrag; lineNumber++) {
+      terminal.write('during $lineNumber\r\n');
+    }
+
+    await tester.pump();
+
+    // Without eviction the row indices never shift, and the assertion below
+    // holds whether the anchor tracks its line or not.
+    expect(
+      terminal.buffer.lines.length,
+      lineCountBefore,
+      reason: 'the buffer must be AT its cap, so those writes evicted',
+    );
+
+    await gesture.moveBy(const Offset(20, 0));
+    await tester.pump();
+
+    final anchorAfter = controller.selection?.begin;
+
+    final anchoredTextAfter = readLineText(terminal, anchorAfter);
+
+    expect(anchorAfter, isNotNull);
+    expect(
+      anchoredTextAfter,
+      anchoredTextBefore,
+      reason: 'the anchor must follow its LINE, not keep a stale row number',
+    );
+
+    await gesture.up();
+  });
+}
+
+/// The text on the row [position] names, or '' when there is no position.
+String readLineText(Terminal terminal, CellOffset? position) {
+  if (position == null) {
+    return '';
+  }
+
+  final line = terminal.buffer.lines[position.y];
+
+  var text = line.getText();
+  text = text.trimRight();
+
+  return text;
 }
