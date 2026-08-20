@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:xterm/src/core/buffer/cell_offset.dart';
+import 'package:xterm/src/core/buffer/line.dart';
 import 'package:xterm/src/core/buffer/range.dart';
 import 'package:xterm/src/core/buffer/segment.dart';
 import 'package:xterm/src/core/mouse/button.dart';
@@ -281,19 +282,42 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
   /// least one cell is selected even if [from] and [to] are same.
   void selectCharacters(Offset from, [Offset? to]) {
     final fromPosition = getCellOffset(from);
-    selectCharactersFrom(fromPosition, to);
+    _selectCharactersFromCell(fromPosition, to);
   }
 
-  /// Selects characters from the buffer cell [fromPosition] to the cell under
-  /// [to]. At least one cell is selected even if the two resolve to the same.
+  /// The cell under [offset], as an ANCHOR bound to the buffer line holding it.
   ///
-  /// The overload that takes a start [Offset] resolves it against the CURRENT
-  /// scroll offset (see [getCellOffset]), so a caller that extends one selection
-  /// over several updates — a drag — must resolve the start ONCE and pass the
-  /// cell back here. Re-resolving the same view-local offset after the view has
-  /// scrolled yields a different cell, which moves the anchor with the viewport
-  /// and slides the whole selection instead of growing it.
-  void selectCharactersFrom(CellOffset fromPosition, [Offset? to]) {
+  /// The caller OWNS the returned anchor and must [CellAnchor.dispose] it, or the
+  /// line goes on holding a reference to it for as long as the line lives.
+  ///
+  /// Pair with [selectCharactersFrom] to extend ONE selection over several
+  /// updates — a drag. Two things move a start position out from under such a
+  /// caller and an anchor survives both: the view SCROLLING, which changes what a
+  /// view-local [Offset] resolves to, and the scrollback EVICTING its oldest
+  /// lines, which shifts every row index below them.
+  CellAnchor createSelectionAnchor(Offset offset) {
+    final position = getCellOffset(offset);
+    final anchor = _terminal.buffer.createAnchorFromOffset(position);
+
+    return anchor;
+  }
+
+  /// Selects characters from [fromAnchor] to the cell under [to]. At least one
+  /// cell is selected even if the two resolve to the same.
+  ///
+  /// Does nothing once [fromAnchor] has DETACHED — the line it named has been
+  /// evicted from the scrollback, so there is no start left to select from.
+  void selectCharactersFrom(CellAnchor fromAnchor, [Offset? to]) {
+    if (!fromAnchor.attached) {
+      return;
+    }
+
+    final fromPosition = fromAnchor.offset;
+
+    _selectCharactersFromCell(fromPosition, to);
+  }
+
+  void _selectCharactersFromCell(CellOffset fromPosition, Offset? to) {
     if (to == null) {
       _controller.setSelection(
         _terminal.buffer.createAnchorFromOffset(fromPosition),

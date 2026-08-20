@@ -1,6 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
-import 'package:xterm/src/core/buffer/cell_offset.dart';
+import 'package:xterm/src/core/buffer/line.dart';
 import 'package:xterm/src/core/mouse/button.dart';
 import 'package:xterm/src/core/mouse/button_state.dart';
 import 'package:xterm/src/terminal_view.dart';
@@ -60,15 +60,32 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
 
   RenderTerminal get renderTerminal => terminalView.renderTerminal;
 
-  /// The buffer cell the current drag started on, resolved ONCE when the drag
-  /// began.
+  /// Where the current drag started, captured ONCE when it began.
   ///
-  /// A cell rather than the start's view-local offset, because that offset names
-  /// a different cell once the view has scrolled — an anchor recovered from it
-  /// would drag the selection along with the viewport.
-  CellOffset? _dragAnchor;
+  /// An anchor rather than the start's view-local offset or a plain cell, because
+  /// both of those go stale under a live terminal: the offset names a different
+  /// cell once the view SCROLLS, and a cell names a different line once the
+  /// scrollback EVICTS its oldest. An anchor is bound to its line and reports
+  /// that line's current index, so it survives both.
+  ///
+  /// OWNED HERE — [_replaceDragAnchor] is the only writer, so a line is never
+  /// left holding one we have forgotten about.
+  CellAnchor? _dragAnchor;
 
   LongPressStartDetails? _lastLongPressStartDetails;
+
+  /// Disposes the previous drag anchor before taking [next]. The single writer
+  /// of [_dragAnchor].
+  void _replaceDragAnchor(CellAnchor? next) {
+    _dragAnchor?.dispose();
+    _dragAnchor = next;
+  }
+
+  @override
+  void dispose() {
+    _replaceDragAnchor(null);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -198,7 +215,9 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
   // void onLongPressUp() {}
 
   void onDragStart(DragStartDetails details) {
-    _dragAnchor = renderTerminal.getCellOffset(details.localPosition);
+    final anchor = renderTerminal.createSelectionAnchor(details.localPosition);
+
+    _replaceDragAnchor(anchor);
 
     details.kind == PointerDeviceKind.mouse
         ? renderTerminal.selectCharacters(details.localPosition)
