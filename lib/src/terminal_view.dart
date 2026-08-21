@@ -229,6 +229,7 @@ class TerminalViewState extends State<TerminalView> {
           autoResize: widget.autoResize,
           textStyle: widget.textStyle,
           textScaler: widget.textScaler ?? MediaQuery.textScalerOf(context),
+          devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
           theme: widget.theme,
           focusNode: _focusNode,
           cursorType: widget.cursorType,
@@ -423,7 +424,11 @@ class TerminalViewState extends State<TerminalView> {
       _scrollToBottom();
     }
 
-    return handled ? KeyEventResult.handled : KeyEventResult.ignored;
+    if (handled) {
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
   }
 
   void _onKeyboardShow() {
@@ -456,6 +461,7 @@ class _TerminalView extends LeafRenderObjectWidget {
     required this.autoResize,
     required this.textStyle,
     required this.textScaler,
+    required this.devicePixelRatio,
     required this.theme,
     required this.focusNode,
     required this.cursorType,
@@ -477,6 +483,11 @@ class _TerminalView extends LeafRenderObjectWidget {
   final TerminalStyle textStyle;
 
   final TextScaler textScaler;
+
+  /// The display's device pixels per logical pixel, so the cell grid can snap to
+  /// whole device pixels. Read from [MediaQuery], so it follows the window onto
+  /// a display with a different scale factor.
+  final double devicePixelRatio;
 
   final TerminalTheme theme;
 
@@ -500,6 +511,7 @@ class _TerminalView extends LeafRenderObjectWidget {
       autoResize: autoResize,
       textStyle: textStyle,
       textScaler: textScaler,
+      devicePixelRatio: devicePixelRatio,
       theme: theme,
       focusNode: focusNode,
       cursorType: cursorType,
@@ -519,6 +531,7 @@ class _TerminalView extends LeafRenderObjectWidget {
       ..autoResize = autoResize
       ..textStyle = textStyle
       ..textScaler = textScaler
+      ..devicePixelRatio = devicePixelRatio
       ..theme = theme
       ..focusNode = focusNode
       ..cursorType = cursorType

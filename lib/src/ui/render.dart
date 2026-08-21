@@ -28,6 +28,7 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
     required bool autoResize,
     required TerminalStyle textStyle,
     required TextScaler textScaler,
+    required double devicePixelRatio,
     required TerminalTheme theme,
     required FocusNode focusNode,
     required TerminalCursorType cursorType,
@@ -48,101 +49,180 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
           theme: theme,
           textStyle: textStyle,
           textScaler: textScaler,
+          devicePixelRatio: devicePixelRatio,
         );
 
   Terminal _terminal;
   set terminal(Terminal terminal) {
-    if (_terminal == terminal) return;
-    if (attached) _terminal.removeListener(_onTerminalChange);
+    if (_terminal == terminal) {
+      return;
+    }
+
+    if (attached) {
+      _terminal.removeListener(_onTerminalChange);
+    }
+
     _terminal = terminal;
-    if (attached) _terminal.addListener(_onTerminalChange);
+
+    if (attached) {
+      _terminal.addListener(_onTerminalChange);
+    }
+
     _resizeTerminalIfNeeded();
     markNeedsLayout();
   }
 
   TerminalController _controller;
   set controller(TerminalController controller) {
-    if (_controller == controller) return;
-    if (attached) _controller.removeListener(_onControllerUpdate);
+    if (_controller == controller) {
+      return;
+    }
+
+    if (attached) {
+      _controller.removeListener(_onControllerUpdate);
+    }
+
     _controller = controller;
-    if (attached) _controller.addListener(_onControllerUpdate);
+
+    if (attached) {
+      _controller.addListener(_onControllerUpdate);
+    }
+
     markNeedsLayout();
   }
 
   ViewportOffset _offset;
   set offset(ViewportOffset value) {
-    if (value == _offset) return;
-    if (attached) _offset.removeListener(_onScroll);
+    if (value == _offset) {
+      return;
+    }
+
+    if (attached) {
+      _offset.removeListener(_onScroll);
+    }
+
     _offset = value;
-    if (attached) _offset.addListener(_onScroll);
+
+    if (attached) {
+      _offset.addListener(_onScroll);
+    }
+
     markNeedsLayout();
   }
 
   EdgeInsets _padding;
   set padding(EdgeInsets value) {
-    if (value == _padding) return;
+    if (value == _padding) {
+      return;
+    }
+
     _padding = value;
     markNeedsLayout();
   }
 
   bool _autoResize;
   set autoResize(bool value) {
-    if (value == _autoResize) return;
+    if (value == _autoResize) {
+      return;
+    }
+
     _autoResize = value;
     markNeedsLayout();
   }
 
   set textStyle(TerminalStyle value) {
-    if (value == _painter.textStyle) return;
+    if (value == _painter.textStyle) {
+      return;
+    }
+
     _painter.textStyle = value;
     markNeedsLayout();
   }
 
   set textScaler(TextScaler value) {
-    if (value == _painter.textScaler) return;
+    if (value == _painter.textScaler) {
+      return;
+    }
+
     _painter.textScaler = value;
     markNeedsLayout();
   }
 
+  /// The display's device pixels per logical pixel. Changing it re-measures the
+  /// cell, which can change the terminal's size in cells — so it relayouts.
+  set devicePixelRatio(double value) {
+    if (value == _painter.devicePixelRatio) {
+      return;
+    }
+
+    _painter.devicePixelRatio = value;
+    markNeedsLayout();
+  }
+
   set theme(TerminalTheme value) {
-    if (value == _painter.theme) return;
+    if (value == _painter.theme) {
+      return;
+    }
+
     _painter.theme = value;
     markNeedsPaint();
   }
 
   FocusNode _focusNode;
   set focusNode(FocusNode value) {
-    if (value == _focusNode) return;
-    if (attached) _focusNode.removeListener(_onFocusChange);
+    if (value == _focusNode) {
+      return;
+    }
+
+    if (attached) {
+      _focusNode.removeListener(_onFocusChange);
+    }
+
     _focusNode = value;
-    if (attached) _focusNode.addListener(_onFocusChange);
+
+    if (attached) {
+      _focusNode.addListener(_onFocusChange);
+    }
+
     markNeedsPaint();
   }
 
   TerminalCursorType _cursorType;
   set cursorType(TerminalCursorType value) {
-    if (value == _cursorType) return;
+    if (value == _cursorType) {
+      return;
+    }
+
     _cursorType = value;
     markNeedsPaint();
   }
 
   bool _alwaysShowCursor;
   set alwaysShowCursor(bool value) {
-    if (value == _alwaysShowCursor) return;
+    if (value == _alwaysShowCursor) {
+      return;
+    }
+
     _alwaysShowCursor = value;
     markNeedsPaint();
   }
 
   EditableRectCallback? _onEditableRect;
   set onEditableRect(EditableRectCallback? value) {
-    if (value == _onEditableRect) return;
+    if (value == _onEditableRect) {
+      return;
+    }
+
     _onEditableRect = value;
     markNeedsLayout();
   }
 
   String? _composingText;
   set composingText(String? value) {
-    if (value == _composingText) return;
+    if (value == _composingText) {
+      return;
+    }
+
     _composingText = value;
     markNeedsPaint();
   }
@@ -257,7 +337,11 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
   void selectWord(Offset from, [Offset? to]) {
     final fromOffset = getCellOffset(from);
     final fromBoundary = _terminal.buffer.getWordBoundary(fromOffset);
-    if (fromBoundary == null) return;
+
+    if (fromBoundary == null) {
+      return;
+    }
+
     if (to == null) {
       _controller.setSelection(
         _terminal.buffer.createAnchorFromOffset(fromBoundary.begin),
@@ -267,7 +351,11 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
     } else {
       final toOffset = getCellOffset(to);
       final toBoundary = _terminal.buffer.getWordBoundary(toOffset);
-      if (toBoundary == null) return;
+
+      if (toBoundary == null) {
+        return;
+      }
+
       final range = fromBoundary.merge(toBoundary);
       _controller.setSelection(
         _terminal.buffer.createAnchorFromOffset(range.begin),
@@ -305,7 +393,10 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
     Offset offset,
   ) {
     final position = getCellOffset(offset);
-    return _terminal.mouseInput(button, buttonState, position);
+
+    final handled = _terminal.mouseInput(button, buttonState, position);
+
+    return handled;
   }
 
   void _notifyEditableRect() {
@@ -361,11 +452,27 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
   }
 
   bool get _isComposingText {
-    return _composingText != null && _composingText!.isNotEmpty;
+    final composingText = _composingText;
+
+    if (composingText == null) {
+      return false;
+    }
+
+    final isComposing = composingText.isNotEmpty;
+
+    return isComposing;
   }
 
   bool get _shouldShowCursor {
-    return _terminal.cursorVisibleMode || _alwaysShowCursor || _isComposingText;
+    if (_terminal.cursorVisibleMode) {
+      return true;
+    }
+
+    if (_alwaysShowCursor) {
+      return true;
+    }
+
+    return _isComposingText;
   }
 
   double get _viewportHeight {
@@ -373,7 +480,11 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
   }
 
   double get _maxScrollExtent {
-    return max(_terminalHeight - _viewportHeight, 0.0);
+    final scrollableHeight = _terminalHeight - _viewportHeight;
+
+    final extent = max(scrollableHeight, 0.0);
+
+    return extent;
   }
 
   double get _lineOffset {
