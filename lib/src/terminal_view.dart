@@ -311,8 +311,13 @@ class TerminalViewState extends State<TerminalView> {
       child: child,
     );
 
+    // withAlpha rather than the deprecated withOpacity, and NOT withValues:
+    // withValues needs Flutter 3.27, while withAlpha has always been there. The
+    // conversion is what withOpacity did internally, so the colour is unchanged.
+    final backgroundAlpha = (widget.backgroundOpacity * 255).round();
+
     child = Container(
-      color: widget.theme.background.withOpacity(widget.backgroundOpacity),
+      color: widget.theme.background.withAlpha(backgroundAlpha),
       padding: widget.padding,
       child: child,
     );

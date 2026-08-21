@@ -185,7 +185,9 @@ class TerminalPainter {
           : resolveBackgroundColor(cellData.background);
 
       if (cellData.flags & CellFlags.faint != 0) {
-        color = color.withOpacity(0.5);
+        // 128 is round(255 * 0.5) — exactly what the deprecated withOpacity(0.5)
+        // produced, so faint text keeps the shade it has always had.
+        color = color.withAlpha(128);
       }
 
       final style = _textStyle.toTextStyle(
