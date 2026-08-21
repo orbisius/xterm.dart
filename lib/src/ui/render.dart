@@ -234,10 +234,67 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
 
   var _stickToBottom = true;
 
+  /// The drag happening RIGHT NOW: the anchor it started from and the last
+  /// pointer position it was extended to, both null between drags.
+  ///
+  /// Held so a viewport SCROLL can extend the selection again without the
+  /// pointer moving. The position is view-local, so once [_scrollOffset] moves it
+  /// resolves to a different cell — which is what lets one drag keep selecting
+  /// across several pages instead of stopping at the edge of the view.
+  ///
+  /// The anchor is BORROWED, never owned: whoever called [selectCharactersFrom]
+  /// disposes it, and [endDragSelection] drops this reference before that can
+  /// happen.
+  CellAnchor? _dragFromAnchor;
+
+  Offset? _dragToOffset;
+
   void _onScroll() {
     _stickToBottom = _scrollOffset >= _maxScrollExtent;
+
+    _extendDragSelectionForScroll();
+
     markNeedsLayout();
     _notifyEditableRect();
+  }
+
+  /// Re-runs the live drag against the scroll position it just moved to.
+  ///
+  /// Without this the far end of the selection stays on the cell the pointer last
+  /// touched, so scrolling with the button held slides the view out from under a
+  /// selection that no longer grows.
+  void _extendDragSelectionForScroll() {
+    final fromAnchor = _dragFromAnchor;
+
+    if (fromAnchor == null) {
+      return;
+    }
+
+    final toOffset = _dragToOffset;
+
+    if (toOffset == null) {
+      return;
+    }
+
+    // The scrollback evicting the line the drag began on leaves nothing to select
+    // from — the same guard [selectCharactersFrom] makes.
+    if (!fromAnchor.attached) {
+      return;
+    }
+
+    final fromPosition = fromAnchor.offset;
+
+    _selectCharactersFromCell(fromPosition, toOffset);
+  }
+
+  /// Stops a drag from tracking the viewport, once the button is released.
+  ///
+  /// The SELECTION stays exactly as it is; only the link between it and the
+  /// scroll position goes, so scrolling afterwards reads as ordinary scrolling
+  /// rather than as more dragging.
+  void endDragSelection() {
+    _dragFromAnchor = null;
+    _dragToOffset = null;
   }
 
   void _onFocusChange() {
@@ -395,10 +452,17 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
   ///
   /// Does nothing once [fromAnchor] has DETACHED — the line it named has been
   /// evicted from the scrollback, so there is no start left to select from.
+  ///
+  /// Each call also becomes the drag the viewport tracks, so scrolling with the
+  /// button held keeps extending this same selection; [endDragSelection] ends
+  /// that when the button comes up.
   void selectCharactersFrom(CellAnchor fromAnchor, [Offset? to]) {
     if (!fromAnchor.attached) {
       return;
     }
+
+    _dragFromAnchor = fromAnchor;
+    _dragToOffset = to;
 
     final fromPosition = fromAnchor.offset;
 

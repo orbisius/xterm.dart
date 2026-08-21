@@ -103,6 +103,7 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
       // onLongPressUp: onLongPressUp,
       onDragStart: onDragStart,
       onDragUpdate: onDragUpdate,
+      onDragEnd: onDragEnd,
       onDoubleTapDown: onDoubleTapDown,
     );
   }
@@ -232,5 +233,12 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
     }
 
     renderTerminal.selectCharactersFrom(anchor, details.localPosition);
+  }
+
+  void onDragEnd(DragEndDetails details) {
+    // The anchor stays alive until the next drag replaces it, but the viewport
+    // must stop extending the selection the moment the button is up — otherwise
+    // ordinary scrolling would go on moving the far end.
+    renderTerminal.endDragSelection();
   }
 }
