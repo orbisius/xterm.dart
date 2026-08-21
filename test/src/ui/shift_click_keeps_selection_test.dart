@@ -79,7 +79,10 @@ void main() {
     final viewCenter = tester.getCenter(find.byType(TerminalView));
 
     await tester.tapAt(viewCenter + const Offset(60, 20));
-    await tester.pump();
+
+    // Tap-up arms a double-tap timer; letting it expire keeps the test from
+    // ending with one still pending, which the framework treats as a failure.
+    await tester.pump(kDoubleTapTimeout);
 
     await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
 
@@ -102,7 +105,8 @@ void main() {
     final viewCenter = tester.getCenter(find.byType(TerminalView));
 
     await tester.tapAt(viewCenter + const Offset(60, 20));
-    await tester.pump();
+
+    await tester.pump(kDoubleTapTimeout);
 
     expect(
       controller.selection,
