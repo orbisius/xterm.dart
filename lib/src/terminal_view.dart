@@ -343,6 +343,14 @@ class TerminalViewState extends State<TerminalView> {
 
   void _onTapDown(_) {
     if (_controller.selection != null) {
+      // SHIFT means "extend the selection to here", so the selection has to
+      // survive the tap that extends it. Clearing it first makes it blink out
+      // and come back, and leaves whoever handles the extend rebuilding what
+      // was just discarded.
+      if (HardwareKeyboard.instance.isShiftPressed) {
+        return;
+      }
+
       _controller.clearSelection();
     } else {
       if (!widget.hardwareKeyboardOnly) {
