@@ -48,7 +48,12 @@ class SuggestionPortal extends StatefulWidget {
 class _SuggestionPortalState extends State<SuggestionPortal> {
   @override
   Widget build(BuildContext context) {
-    return OverlayPortal.targetsRootOverlay(
+    // The named constructor is deprecated in favour of naming the location, so
+    // rootOverlay here is the same target it always used. NOT sent upstream:
+    // OverlayChildLocation arrived in Flutter 3.33, and raising the package's
+    // floor is the maintainer's call, not ours.
+    return OverlayPortal(
+      overlayLocation: OverlayChildLocation.rootOverlay,
       controller: widget.controller,
       overlayChildBuilder: (context) {
         return SuggestionLayout(
