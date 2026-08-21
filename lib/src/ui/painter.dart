@@ -11,9 +11,11 @@ class TerminalPainter {
     required TerminalTheme theme,
     required TerminalStyle textStyle,
     required TextScaler textScaler,
+    required double devicePixelRatio,
   })  : _textStyle = textStyle,
         _theme = theme,
-        _textScaler = textScaler;
+        _textScaler = textScaler,
+        _devicePixelRatio = devicePixelRatio;
 
   /// A lookup table from terminal colors to Flutter colors.
   late var _colorPalette = PaletteBuilder(_theme).build();
@@ -29,7 +31,10 @@ class TerminalPainter {
   TerminalStyle get textStyle => _textStyle;
   TerminalStyle _textStyle;
   set textStyle(TerminalStyle value) {
-    if (value == _textStyle) return;
+    if (value == _textStyle) {
+      return;
+    }
+
     _textStyle = value;
     _cellSize = _measureCharSize();
     _paragraphCache.clear();
@@ -38,8 +43,28 @@ class TerminalPainter {
   TextScaler get textScaler => _textScaler;
   TextScaler _textScaler = TextScaler.linear(1.0);
   set textScaler(TextScaler value) {
-    if (value == _textScaler) return;
+    if (value == _textScaler) {
+      return;
+    }
+
     _textScaler = value;
+    _cellSize = _measureCharSize();
+    _paragraphCache.clear();
+  }
+
+  /// The display's device pixels per logical pixel, used to snap the cell grid
+  /// to whole DEVICE pixels — see [_measureCharSize].
+  ///
+  /// Changes when the window moves to a display with a different scale factor,
+  /// which re-measures and so can change the terminal's size in cells.
+  double get devicePixelRatio => _devicePixelRatio;
+  double _devicePixelRatio;
+  set devicePixelRatio(double value) {
+    if (value == _devicePixelRatio) {
+      return;
+    }
+
+    _devicePixelRatio = value;
     _cellSize = _measureCharSize();
     _paragraphCache.clear();
   }
@@ -47,7 +72,10 @@ class TerminalPainter {
   TerminalTheme get theme => _theme;
   TerminalTheme _theme;
   set theme(TerminalTheme value) {
-    if (value == _theme) return;
+    if (value == _theme) {
+      return;
+    }
+
     _theme = value;
     _colorPalette = PaletteBuilder(value).build();
     _paragraphCache.clear();
@@ -67,12 +95,34 @@ class TerminalPainter {
     paragraph.layout(ParagraphConstraints(width: double.infinity));
 
     final result = Size(
-      paragraph.maxIntrinsicWidth / test.length,
-      paragraph.height,
+      _snapToDevicePixels(paragraph.maxIntrinsicWidth / test.length),
+      _snapToDevicePixels(paragraph.height),
     );
 
     paragraph.dispose();
     return result;
+  }
+
+  /// Rounds a measured extent to a whole DEVICE pixel.
+  ///
+  /// A cell measured straight from the paragraph is fractional — at 13pt with a
+  /// 1.2 line height it is about 15.6 logical pixels tall. Every row and column
+  /// is then placed at a multiple of that, so all but the first land between
+  /// device pixels and each glyph is rasterized across two, which reads as
+  /// blurry text next to a terminal that snaps its grid.
+  ///
+  /// ROUND, never floor: flooring drops a fraction of a pixel from every row,
+  /// and the error accumulates down the screen.
+  double _snapToDevicePixels(double value) {
+    if (_devicePixelRatio <= 0) {
+      return value;
+    }
+
+    final devicePixels = (value * _devicePixelRatio).round();
+
+    final snapped = devicePixels / _devicePixelRatio;
+
+    return snapped;
   }
 
   /// The size of each character in the terminal.
@@ -172,7 +222,10 @@ class TerminalPainter {
   @pragma('vm:prefer-inline')
   void paintCellForeground(Canvas canvas, Offset offset, CellData cellData) {
     final charCode = cellData.content & CellContent.codepointMask;
-    if (charCode == 0) return;
+
+    if (charCode == 0) {
+      return;
+    }
 
     final cacheKey = cellData.getHash() ^ _textScaler.hashCode;
     var paragraph = _paragraphCache.getLayoutFromCache(cacheKey);
