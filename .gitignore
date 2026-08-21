@@ -80,3 +80,7 @@ example/lib/debug.dart
 coverage/
 
 example2/
+
+# Written by the golden comparator when an image test fails — the actual, the
+# expected and the diff, for looking at. Regenerated on every failing run.
+test/**/failures/
