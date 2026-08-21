@@ -197,6 +197,16 @@ class CustomTextEditState extends State<CustomTextEdit> with TextInputClient {
 
   late var _currentEditingState = _initEditingState.copyWith();
 
+  /// The platform text that has already been handed to [CustomTextEdit.onInsert].
+  ///
+  /// [updateEditingValue] asks the platform to clear the field after every
+  /// insert, but that request travels back to the embedder and is applied
+  /// asynchronously. A key committed before it lands is therefore reported on
+  /// top of text that was already sent, so the delta is measured from here
+  /// rather than from [_initEditingState] — otherwise that earlier text goes out
+  /// a second time.
+  late var _consumedText = _initEditingState.text;
+
   @override
   TextEditingValue? get currentTextEditingValue {
     return _currentEditingState;
@@ -224,12 +234,27 @@ class CustomTextEditState extends State<CustomTextEdit> with TextInputClient {
     if (_currentEditingState.text.length < _initEditingState.text.length) {
       widget.onDelete();
     } else {
-      final textDelta = _currentEditingState.text.substring(
-        _initEditingState.text.length,
-      );
+      final text = _currentEditingState.text;
+
+      // A value that EXTENDS the consumed text means the reset below has not
+      // been applied yet, so only the tail past it is new. The last term keeps
+      // the delete case out: there the consumed text is SHORTER than the base,
+      // which makes the next value a fresh field rather than an extension.
+      final isUnresetExtension =
+          text.length > _consumedText.length &&
+          text.startsWith(_consumedText) &&
+          _consumedText.startsWith(_initEditingState.text);
+
+      final consumedLength = isUnresetExtension
+          ? _consumedText.length
+          : _initEditingState.text.length;
+
+      final textDelta = text.substring(consumedLength);
 
       widget.onInsert(textDelta);
     }
+
+    _consumedText = _currentEditingState.text;
 
     // Reset editing state if composing is done
     if (_currentEditingState.composing.isCollapsed &&
