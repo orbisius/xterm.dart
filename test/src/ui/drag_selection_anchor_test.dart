@@ -51,6 +51,14 @@ void main() {
 
     await tester.pump();
 
+    // The terminal sticks to the bottom as it writes, so it is ALREADY at the
+    // maximum offset. Starting from the top is what leaves somewhere to scroll
+    // TO — jumping to the extent from the extent moves nothing, and the anchor
+    // assertion below then holds with or without the fix.
+    scrollController.jumpTo(0);
+
+    await tester.pump();
+
     final viewCenter = tester.getCenter(find.byType(TerminalView));
 
     // Press and move a little, so a selection exists before anything scrolls.
@@ -73,11 +81,13 @@ void main() {
     final scrollExtent = scrollController.position.maxScrollExtent;
 
     // Without somewhere to scroll, the assertion below holds no matter what the
-    // anchor does and the test proves nothing.
+    // anchor does and the test proves nothing. Comparing against the CURRENT
+    // position rather than against zero is what makes that real: the extent can
+    // be large while the view already sits on it.
     expect(
       scrollExtent,
-      greaterThan(0),
-      reason: 'the view needs scrollback to scroll through',
+      greaterThan(scrollController.position.pixels),
+      reason: 'the view must have somewhere left to scroll to',
     );
 
     // Scroll WITHOUT releasing the button — the case the anchor has to survive.
