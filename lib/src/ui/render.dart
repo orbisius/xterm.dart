@@ -656,7 +656,9 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
       effectLastLine,
     );
 
-    if (_controller.selection != null) {
+    // The bool first: it is a field read, while `selection` builds a BufferRange
+    // from two anchors on every call.
+    if (_controller.selectionVisible && _controller.selection != null) {
       _paintSelection(
         canvas,
         _controller.selection!,

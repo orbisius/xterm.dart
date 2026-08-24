@@ -76,6 +76,27 @@ class TerminalController with ChangeNotifier {
     }
   }
 
+  /// Whether the selection is DRAWN. True by default; the selection itself is
+  /// unaffected either way.
+  ///
+  /// A host needs this on the alternate screen, where a full-screen program
+  /// repaints the rows a selection covers instead of scrolling them. The
+  /// selection is still there and still copyable, but the highlight now sits over
+  /// characters the user never chose — so the host hides it until the rows hold
+  /// that text again, rather than clearing a selection the user still wants.
+  bool get selectionVisible => _selectionVisible;
+  bool _selectionVisible = true;
+
+  /// Shows or hides the selection highlight without touching the selection.
+  void setSelectionVisible(bool visible) {
+    if (_selectionVisible == visible) {
+      return;
+    }
+
+    _selectionVisible = visible;
+    notifyListeners();
+  }
+
   /// Controls how the terminal behaves when the user selects a range of text.
   /// The default is [SelectionMode.line]. Setting this to [SelectionMode.block]
   /// enables block selection mode.
