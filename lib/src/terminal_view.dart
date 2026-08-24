@@ -364,7 +364,20 @@ class TerminalViewState extends State<TerminalView> {
   /// terminal sits from the window's origin — a constant error, and invisible
   /// unless an application is reading mouse events.
   CellOffset getCellOffsetFromGlobal(Offset globalOffset) {
-    final localOffset = renderTerminal.globalToLocal(globalOffset);
+    var localOffset = renderTerminal.globalToLocal(globalOffset);
+
+    // A transform can be degenerate — a display being reconfigured under a
+    // running window is the case that reaches this — and then globalToLocal
+    // returns NaN or infinity. getCellOffset divides by the cell size with `~/`,
+    // which THROWS on either, and the scroll handler calls this BEFORE sending
+    // its mouse report, so the throw would take the wheel's arrow-key fallback
+    // down with it and leave scrolling doing nothing at all. Falling back to the
+    // origin reports a cell that may be wrong for one event; throwing breaks the
+    // wheel entirely.
+    if (!localOffset.isFinite) {
+      localOffset = Offset.zero;
+    }
+
     final cellOffset = renderTerminal.getCellOffset(localOffset);
     return cellOffset;
   }
