@@ -19,7 +19,10 @@ class TerminalScrollGestureHandler extends StatefulWidget {
   final Terminal terminal;
 
   /// Returns the cell offset for the pixel offset.
-  final CellOffset Function(Offset) getCellOffset;
+  /// The cell under a GLOBAL pointer position. Global because that is all this
+  /// handler has — it sits above the terminal in the tree — so the callback owns
+  /// the conversion, since only the terminal knows where it sits on screen.
+  final CellOffset Function(Offset globalOffset) getCellOffset;
 
   /// Returns the pixel height of lines in the terminal.
   final double Function() getLineHeight;
@@ -46,9 +49,12 @@ class _TerminalScrollGestureHandlerState
   /// determine how many the scroll events should be sent to the terminal.
   var lastLineOffset = 0;
 
-  /// This variable tracks the last offset where the scroll gesture started.
-  /// Used to calculate the cell offset of the terminal mouse event.
-  var lastPointerPosition = Offset.zero;
+  /// Where the last scroll gesture started, in GLOBAL coordinates — that is what
+  /// [PointerEvent.position] is, and this handler sits above the terminal in the
+  /// tree, so it has no terminal-local coordinates to record. Named for its
+  /// space because [getCellOffset] takes the other one, and nothing about
+  /// `Offset` says which you are holding.
+  var lastGlobalPointerPosition = Offset.zero;
 
   @override
   void initState() {
@@ -84,7 +90,7 @@ class _TerminalScrollGestureHandlerState
   /// then if the application doesn't recognize mouse wheel events, this method
   /// will simulate scroll events by sending up/down arrow keys.
   void _sendScrollEvent(bool up) {
-    final position = widget.getCellOffset(lastPointerPosition);
+    final position = widget.getCellOffset(lastGlobalPointerPosition);
 
     final handled = widget.terminal.mouseInput(
       up ? TerminalMouseButton.wheelUp : TerminalMouseButton.wheelDown,
@@ -119,10 +125,10 @@ class _TerminalScrollGestureHandlerState
 
     return Listener(
       onPointerSignal: (event) {
-        lastPointerPosition = event.position;
+        lastGlobalPointerPosition = event.position;
       },
       onPointerDown: (event) {
-        lastPointerPosition = event.position;
+        lastGlobalPointerPosition = event.position;
       },
       child: InfiniteScrollView(
         onScroll: _onScroll,
