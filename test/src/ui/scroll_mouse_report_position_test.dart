@@ -154,6 +154,25 @@ void main() {
     );
   });
 
+  testWidgets('a non-finite position yields a cell instead of throwing', (
+    tester,
+  ) async {
+    // The conversion walks the ancestor transform, and a transform can be
+    // degenerate — a display reconfigured under a running window is the case
+    // that reaches it — producing NaN or infinity. getCellOffset divides with
+    // `~/`, which throws on both, and the scroll handler calls this BEFORE
+    // sending its report, so a throw here takes the arrow-key fallback with it
+    // and the wheel stops doing anything at all.
+    await pumpOffsetTerminal(tester);
+
+    final state = viewState(tester);
+
+    final cell = state.getCellOffsetFromGlobal(Offset.infinite);
+
+    expect(cell.x, greaterThanOrEqualTo(0));
+    expect(cell.y, greaterThanOrEqualTo(0));
+  });
+
   testWidgets('the terminal top-left is the first visible cell', (
     tester,
   ) async {
