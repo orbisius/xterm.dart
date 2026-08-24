@@ -254,7 +254,7 @@ class TerminalViewState extends State<TerminalView> {
     child = TerminalScrollGestureHandler(
       terminal: widget.terminal,
       simulateScroll: widget.simulateScroll,
-      getCellOffset: (offset) => renderTerminal.getCellOffset(offset),
+      getCellOffset: getCellOffsetFromGlobal,
       getLineHeight: () => renderTerminal.lineHeight,
       child: child,
     );
@@ -352,6 +352,21 @@ class TerminalViewState extends State<TerminalView> {
 
   Rect get globalCursorRect {
     return renderTerminal.localToGlobal(renderTerminal.cursorOffset) & renderTerminal.cellSize;
+  }
+
+  /// The cell under a GLOBAL pointer position.
+  ///
+  /// [RenderTerminal.getCellOffset] takes coordinates local to the terminal, and
+  /// every gesture callback here already receives `details.localPosition`. The
+  /// scroll handler is the exception: it sits ABOVE the terminal in the tree and
+  /// records `PointerEvent.position`, which is global. Handing that straight to
+  /// `getCellOffset` reports a cell too far down and right by however far the
+  /// terminal sits from the window's origin — a constant error, and invisible
+  /// unless an application is reading mouse events.
+  CellOffset getCellOffsetFromGlobal(Offset globalOffset) {
+    final localOffset = renderTerminal.globalToLocal(globalOffset);
+    final cellOffset = renderTerminal.getCellOffset(localOffset);
+    return cellOffset;
   }
 
   void _onTapUp(TapUpDetails details) {
