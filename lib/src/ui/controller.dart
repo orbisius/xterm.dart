@@ -171,4 +171,24 @@ class TerminalHighlight with Disposable {
     }
     return BufferRangeLine(p1.offset, p2.offset);
   }
+
+  /// Releases the anchors along with the highlight.
+  ///
+  /// An anchor registers itself with the line it points at and is only taken off
+  /// again when it is disposed or that line leaves the buffer. Dropping the
+  /// highlight without them left both anchors attached for as long as their
+  /// lines lived, and every buffer operation that moves a line walks the anchors
+  /// on it — so repeated highlighting (a search re-run on every keystroke) both
+  /// grew memory and made scrolling steadily more expensive. On the alternate
+  /// screen, where lines are never evicted, nothing ever cleaned them up.
+  ///
+  /// [TerminalController.clearSelection] already disposes the anchors it was
+  /// given, so a highlight owning the two it holds matches how a selection
+  /// behaves rather than introducing a second rule.
+  @override
+  void dispose() {
+    p1.dispose();
+    p2.dispose();
+    super.dispose();
+  }
 }
