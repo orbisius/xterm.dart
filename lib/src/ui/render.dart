@@ -276,15 +276,43 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
       return;
     }
 
-    // The scrollback evicting the line the drag began on leaves nothing to select
-    // from — the same guard [selectCharactersFrom] makes.
-    if (!fromAnchor.attached) {
+    if (!_isAnchorSelectable(fromAnchor)) {
       return;
     }
 
     final fromPosition = fromAnchor.offset;
 
     _selectCharactersFromCell(fromPosition, toOffset);
+  }
+
+  /// Whether [anchor] still names a line of the buffer now being selected in.
+  ///
+  /// Two ways it stops doing so. The scrollback can evict the line the drag
+  /// began on, which leaves the anchor detached. And a full-screen program can
+  /// switch buffers mid-drag: the line stays attached to the screen it came
+  /// from, so the anchor keeps reporting a row that the CURRENT buffer may not
+  /// have — reading it would index past the end.
+  ///
+  /// Two comparisons and no allocation, because a drag re-checks this on every
+  /// pointer move and on every scroll tick while output is pouring in.
+  bool _isAnchorSelectable(CellAnchor anchor) {
+    if (!anchor.attached) {
+      return false;
+    }
+
+    final row = anchor.offset.y;
+
+    final lines = _terminal.buffer.lines;
+
+    if (row < 0 || row >= lines.length) {
+      return false;
+    }
+
+    // In range is not the same as in THIS buffer — a short alt screen overlaps
+    // the low rows of a long scrollback.
+    final sameLine = identical(lines[row], anchor.line);
+
+    return sameLine;
   }
 
   /// Stops a drag from tracking the viewport, once the button is released.
@@ -457,7 +485,7 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
   /// button held keeps extending this same selection; [endDragSelection] ends
   /// that when the button comes up.
   void selectCharactersFrom(CellAnchor fromAnchor, [Offset? to]) {
-    if (!fromAnchor.attached) {
+    if (!_isAnchorSelectable(fromAnchor)) {
       return;
     }
 
