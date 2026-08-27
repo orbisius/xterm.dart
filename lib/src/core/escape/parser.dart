@@ -507,6 +507,15 @@ class EscapeParser {
   ///
   /// https://terminalguide.namepad.de/seq/csi_sm/
   void _csiHandleSgr() {
+    // A PREFIXED `m` is a different command wearing SGR's final byte —
+    // `CSI > Pp ; Pv m` is XTMODKEYS (xterm keyboard configuration) and
+    // `CSI ? ... m` is private. Reading their parameters as styling latches
+    // attributes: an application resetting modifyOtherKeys on exit with
+    // `CSI > 4 m` underlines everything drawn after it.
+    if (_csi.prefix != null) {
+      return;
+    }
+
     final params = _csi.params;
 
     if (params.isEmpty) {
