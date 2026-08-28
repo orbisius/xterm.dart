@@ -120,6 +120,27 @@ class TerminalController with ChangeNotifier {
         : _pointerInputs.inputs.contains(pointerInput);
   }
 
+  /// How often the terminal's OUTPUT may trigger a relayout, null = on every
+  /// change (the default, and the behavior with no host involvement).
+  ///
+  /// A host sets an interval while draining a large backlog: frames painted
+  /// mid-flood scroll away unread, and the layout/paint pipeline can outweigh
+  /// the parsing itself several times over — so capping the cadence makes the
+  /// drain dramatically faster without touching what ends up on screen.
+  /// Clearing the interval notifies, so the final state always paints.
+  Duration? get outputRepaintInterval => _outputRepaintInterval;
+  Duration? _outputRepaintInterval;
+
+  /// Caps output-driven relayouts to one per [interval], null to uncap.
+  void setOutputRepaintInterval(Duration? interval) {
+    if (_outputRepaintInterval == interval) {
+      return;
+    }
+
+    _outputRepaintInterval = interval;
+    notifyListeners();
+  }
+
   /// Creates a new highlight on the terminal from [p1] to [p2] with the given
   /// [color]. The highlight will be removed when the returned object is
   /// disposed.

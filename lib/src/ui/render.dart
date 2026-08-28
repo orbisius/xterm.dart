@@ -163,7 +163,29 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
     markNeedsPaint();
   }
 
+  /// Wall-clock milliseconds of the last output-driven relayout that passed
+  /// the throttle gate in [_onTerminalChange]. Zero = never gated yet, so the
+  /// first throttled change always lays out immediately.
+  int _lastOutputLayoutMs = 0;
+
   void _onTerminalChange() {
+    // While the host caps the cadence (see
+    // [TerminalController.outputRepaintInterval]), a change inside the
+    // interval is simply not drawn — the next one past the interval is, and
+    // clearing the interval notifies through the controller, so the final
+    // state can never be left unpainted.
+    final interval = _controller.outputRepaintInterval;
+
+    if (interval != null) {
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+
+      if (nowMs - _lastOutputLayoutMs < interval.inMilliseconds) {
+        return;
+      }
+
+      _lastOutputLayoutMs = nowMs;
+    }
+
     markNeedsLayout();
     _notifyEditableRect();
   }
