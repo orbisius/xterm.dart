@@ -50,6 +50,31 @@ class TerminalController with ChangeNotifier {
     return _createRange(base.offset, extent.offset);
   }
 
+  /// The live selection's BASE anchor — the end a drag grows FROM, exactly as
+  /// [setSelection] received it (never normalized). Null when nothing is
+  /// selected or either anchor has detached.
+  ///
+  /// This is the single source of truth for where the selection starts, which
+  /// is what lets an embedder RE-BASE a selection mid-drag: on the alternate
+  /// screen a program scrolls by repainting cells IN PLACE, so a line-bound
+  /// drag anchor stays on a row whose text has moved away, and only the
+  /// embedder can know how far. It re-issues [setSelection] with shifted
+  /// anchors, and the drag reads the new base from here instead of stomping it.
+  CellAnchor? get selectionBaseAnchor {
+    final base = _selectionBase;
+    final extent = _selectionExtent;
+
+    if (base == null || extent == null) {
+      return null;
+    }
+
+    if (!base.attached || !extent.attached) {
+      return null;
+    }
+
+    return base;
+  }
+
   /// Set selection on the terminal from [base] to [extent]. This method takes
   /// the ownership of [base] and [extent] and will dispose them when the
   /// selection is cleared or changed.
