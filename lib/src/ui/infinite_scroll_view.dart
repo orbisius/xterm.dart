@@ -22,6 +22,7 @@ class InfiniteScrollView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scrollable(
+      physics: const _EventDrivenScrollPhysics(),
       viewportBuilder: (context, position) {
         return _InfiniteScrollView(
           position: position,
@@ -111,5 +112,33 @@ class _RenderInfiniteScrollView extends RenderShiftedBox {
     size = child?.size ?? Size.zero;
     _position.applyViewportDimension(size.height);
     _position.applyContentDimensions(double.negativeInfinity, double.infinity);
+  }
+}
+
+/// Scroll physics for a viewport whose motion is converted into events for a
+/// program, rather than moving content the user can see settle.
+///
+/// No ballistic phase: on an INFINITE extent a fling never meets a boundary,
+/// so the platform's momentum simulation coasts on long after the fingers
+/// lift — and every line it coasts through fires another event at the
+/// program, which cannot be taken back. A gesture moves exactly as far as the
+/// input carried it, the way a physical terminal's wheel does.
+class _EventDrivenScrollPhysics extends ScrollPhysics {
+  const _EventDrivenScrollPhysics({super.parent});
+
+  @override
+  _EventDrivenScrollPhysics applyTo(ScrollPhysics? ancestor) {
+    final parentPhysics = buildParent(ancestor);
+    final applied = _EventDrivenScrollPhysics(parent: parentPhysics);
+
+    return applied;
+  }
+
+  @override
+  Simulation? createBallisticSimulation(
+    ScrollMetrics position,
+    double velocity,
+  ) {
+    return null;
   }
 }
