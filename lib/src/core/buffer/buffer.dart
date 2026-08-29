@@ -511,46 +511,98 @@ class Buffer {
     r'\'.codeUnitAt(0),
   };
 
+  /// The word containing [position], or null when there is none.
+  ///
+  /// A word FOLLOWS a soft-wrapped line across rows: a row whose
+  /// [BufferLine.isWrapped] is set continues the row above it — the terminal
+  /// broke the line, not the program — so the scan crosses that edge in both
+  /// directions, exactly as [getText] joins it. A row the program ended
+  /// itself (no wrap flag) still stops the word: that break is real output.
   BufferRangeLine? getWordBoundary(CellOffset position) {
     var separators = wordSeparators ?? defaultWordSeparators;
     if (position.y >= lines.length) {
       return null;
     }
 
-    var line = lines[position.y];
+    var startLineIndex = position.y;
     var start = position.x;
-    var end = position.x;
 
     do {
       if (start == 0) {
+        if (startLineIndex > 0 && lines[startLineIndex].isWrapped) {
+          startLineIndex--;
+          start = viewWidth;
+          continue;
+        }
         break;
       }
-      final char = line.getCodePoint(start - 1);
+      final char = lines[startLineIndex].getCodePoint(start - 1);
       if (separators.contains(char)) {
         break;
       }
       start--;
     } while (true);
 
+    var endLineIndex = position.y;
+    var end = position.x;
+
     do {
       if (end >= viewWidth) {
+        final nextLineIndex = endLineIndex + 1;
+        if (nextLineIndex < lines.length && lines[nextLineIndex].isWrapped) {
+          endLineIndex = nextLineIndex;
+          end = 0;
+          continue;
+        }
         break;
       }
-      final char = line.getCodePoint(end);
+      final char = lines[endLineIndex].getCodePoint(end);
       if (separators.contains(char)) {
         break;
       }
       end++;
     } while (true);
 
-    if (start == end) {
+    if (startLineIndex == endLineIndex && start == end) {
       return null;
     }
 
-    return BufferRangeLine(
-      CellOffset(start, position.y),
-      CellOffset(end, position.y),
+    final wordRange = BufferRangeLine(
+      CellOffset(start, startLineIndex),
+      CellOffset(end, endLineIndex),
     );
+
+    return wordRange;
+  }
+
+  /// The whole LOGICAL line containing [position] — the visual row plus every
+  /// soft-wrapped row chained to it with [BufferLine.isWrapped], in both
+  /// directions. However narrow the view, this is the line the program
+  /// actually wrote; a row the program ended itself is its own line.
+  BufferRangeLine? getLineBoundary(CellOffset position) {
+    if (position.y >= lines.length) {
+      return null;
+    }
+
+    var startLineIndex = position.y;
+
+    while (startLineIndex > 0 && lines[startLineIndex].isWrapped) {
+      startLineIndex--;
+    }
+
+    var endLineIndex = position.y;
+
+    while (endLineIndex + 1 < lines.length &&
+        lines[endLineIndex + 1].isWrapped) {
+      endLineIndex++;
+    }
+
+    final lineRange = BufferRangeLine(
+      CellOffset(0, startLineIndex),
+      CellOffset(viewWidth, endLineIndex),
+    );
+
+    return lineRange;
   }
 
   /// Get the plain text content of the buffer including the scrollback.
