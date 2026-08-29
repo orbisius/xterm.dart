@@ -203,6 +203,156 @@ void main() {
     });
   });
 
+  group('Buffer.getWordBoundary follows soft-wrapped lines', () {
+    test('crosses the wrap edge forward from the first row', () {
+      final terminal = Terminal();
+      terminal.resize(20, 5);
+
+      terminal.write('AB CDEFGHIJKLMNOPQRSTUVWXYZ');
+
+      expect(terminal.buffer.lines[1].isWrapped, isTrue);
+
+      final boundary = terminal.buffer.getWordBoundary(CellOffset(5, 0));
+
+      expect(
+        boundary,
+        BufferRangeLine(CellOffset(3, 0), CellOffset(7, 1)),
+      );
+
+      expect(terminal.buffer.getText(boundary), 'CDEFGHIJKLMNOPQRSTUVWXYZ');
+    });
+
+    test('crosses the wrap edge backward from the continuation row', () {
+      final terminal = Terminal();
+      terminal.resize(20, 5);
+
+      terminal.write('AB CDEFGHIJKLMNOPQRSTUVWXYZ');
+
+      expect(terminal.buffer.lines[1].isWrapped, isTrue);
+
+      final boundary = terminal.buffer.getWordBoundary(CellOffset(2, 1));
+
+      expect(
+        boundary,
+        BufferRangeLine(CellOffset(3, 0), CellOffset(7, 1)),
+      );
+
+      expect(terminal.buffer.getText(boundary), 'CDEFGHIJKLMNOPQRSTUVWXYZ');
+    });
+
+    test('stops at a separator that ends the previous row', () {
+      final terminal = Terminal();
+      terminal.resize(20, 5);
+
+      terminal.write('ABCDEFGHIJKLMNOPQRS VWXYZ');
+
+      expect(terminal.buffer.lines[1].isWrapped, isTrue);
+
+      final boundary = terminal.buffer.getWordBoundary(CellOffset(1, 1));
+
+      expect(terminal.buffer.getText(boundary), 'VWXYZ');
+    });
+
+    test('follows a token across multiple wrapped rows', () {
+      final terminal = Terminal();
+      terminal.resize(10, 5);
+
+      terminal.write('ABCDEFGHIJKLMNOPQRSTUVWXY');
+
+      expect(terminal.buffer.lines[1].isWrapped, isTrue);
+      expect(terminal.buffer.lines[2].isWrapped, isTrue);
+
+      final boundary = terminal.buffer.getWordBoundary(CellOffset(5, 1));
+
+      expect(
+        boundary,
+        BufferRangeLine(CellOffset(0, 0), CellOffset(5, 2)),
+      );
+
+      expect(terminal.buffer.getText(boundary), 'ABCDEFGHIJKLMNOPQRSTUVWXY');
+    });
+
+    test('a hard line break still stops the word', () {
+      final terminal = Terminal();
+      terminal.resize(20, 5);
+
+      terminal.write('ABCDEFGH\r\nIJKL');
+
+      expect(terminal.buffer.lines[1].isWrapped, isFalse);
+
+      expect(
+        terminal.buffer.getWordBoundary(CellOffset(2, 0)),
+        BufferRangeLine(CellOffset(0, 0), CellOffset(8, 0)),
+      );
+
+      expect(
+        terminal.buffer.getWordBoundary(CellOffset(1, 1)),
+        BufferRangeLine(CellOffset(0, 1), CellOffset(4, 1)),
+      );
+    });
+  });
+
+  group('Buffer.getLineBoundary', () {
+    test('selects the whole logical line from any of its rows', () {
+      final terminal = Terminal();
+      terminal.resize(20, 5);
+
+      terminal.write('AB CDEFGHIJKLMNOPQRSTUVWXYZ');
+
+      expect(terminal.buffer.lines[1].isWrapped, isTrue);
+
+      final fromFirstRow = terminal.buffer.getLineBoundary(CellOffset(4, 0));
+
+      expect(
+        fromFirstRow,
+        BufferRangeLine(CellOffset(0, 0), CellOffset(20, 1)),
+      );
+
+      final fromWrappedRow = terminal.buffer.getLineBoundary(CellOffset(3, 1));
+
+      expect(
+        fromWrappedRow,
+        BufferRangeLine(CellOffset(0, 0), CellOffset(20, 1)),
+      );
+
+      expect(terminal.buffer.getText(fromFirstRow), 'AB CDEFGHIJKLMNOPQRSTUVWXYZ');
+    });
+
+    test('a hard-broken row is its own line', () {
+      final terminal = Terminal();
+      terminal.resize(20, 5);
+
+      terminal.write('ABCDEFGH\r\nIJKL');
+
+      expect(terminal.buffer.lines[1].isWrapped, isFalse);
+
+      expect(
+        terminal.buffer.getLineBoundary(CellOffset(0, 0)),
+        BufferRangeLine(CellOffset(0, 0), CellOffset(20, 0)),
+      );
+
+      expect(
+        terminal.buffer.getLineBoundary(CellOffset(2, 1)),
+        BufferRangeLine(CellOffset(0, 1), CellOffset(20, 1)),
+      );
+    });
+
+    test('follows a line across multiple wrapped rows', () {
+      final terminal = Terminal();
+      terminal.resize(10, 5);
+
+      terminal.write('ABCDEFGHIJKLMNOPQRSTUVWXY');
+
+      expect(terminal.buffer.lines[1].isWrapped, isTrue);
+      expect(terminal.buffer.lines[2].isWrapped, isTrue);
+
+      expect(
+        terminal.buffer.getLineBoundary(CellOffset(3, 1)),
+        BufferRangeLine(CellOffset(0, 0), CellOffset(10, 2)),
+      );
+    });
+  });
+
   test('does not delete lines beyond the scroll region', () {
     final terminal = Terminal();
     terminal.resize(10, 10);
