@@ -202,7 +202,7 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
       return;
     }
 
-    final fromPosition = fromAnchor.offset;
+    final fromPosition = _resolveDragFromPosition(fromAnchor);
 
     _selectCharactersFromCell(fromPosition, toOffset);
   }
@@ -376,9 +376,30 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
     _dragFromAnchor = fromAnchor;
     _dragToOffset = to;
 
-    final fromPosition = fromAnchor.offset;
+    final fromPosition = _resolveDragFromPosition(fromAnchor);
 
     _selectCharactersFromCell(fromPosition, to);
+  }
+
+  /// Where the live drag extends FROM: the controller's own selection base
+  /// while one is live, else [fromAnchor]'s cell.
+  ///
+  /// On the main screen the two are the same cell — every update re-creates
+  /// the controller's base from this same anchor. They differ when the
+  /// EMBEDDER re-bases the selection mid-drag (see
+  /// [TerminalController.selectionBaseAnchor]): the alternate screen repaints
+  /// cells in place, so [fromAnchor] stays on a row whose text has scrolled
+  /// away, and only the embedder knows how far it moved. Preferring the
+  /// controller's base lets that re-base hold instead of being stomped by the
+  /// next pointer move or viewport scroll.
+  CellOffset _resolveDragFromPosition(CellAnchor fromAnchor) {
+    final selectionBase = _controller.selectionBaseAnchor;
+
+    if (selectionBase != null) {
+      return selectionBase.offset;
+    }
+
+    return fromAnchor.offset;
   }
 
   void _selectCharactersFromCell(CellOffset fromPosition, Offset? to) {
