@@ -16,10 +16,17 @@ import 'package:xterm/xterm.dart';
 /// alt screen's reports are spent by the program, and most TUIs step three lines
 /// per report, so the same gesture travels roughly three times as far there.
 ///
-/// So what is pinned is the AGREEMENT, not a target speed: whatever rate is
-/// chosen later, a change that moves one path without the other is a bug, and
-/// that is the regression this catches. The measured numbers are printed with it,
-/// because the ratio is the thing being tuned.
+/// So what is pinned is the AGREEMENT at NOTCH scale, not a target speed:
+/// whatever rate is chosen, a change that moves one path without the other at
+/// that scale is a bug. The measured numbers are printed with it, because the
+/// ratio is the thing being tuned.
+///
+/// ACCELERATED spins are the deliberate exception (see `scroll_bounded_test`):
+/// the alt path CAPS what one event may send
+/// ([TerminalScrollGestureHandler.maxLinesPerScrollEvent]) and takes no
+/// ballistic coast, while the main screen keeps both. The two differ on
+/// purpose — alt events are executed by a program with no way back, the main
+/// screen is a local view a scrollbar can recover.
 void main() {
   const viewWidth = 400.0;
   const viewHeight = 300.0;
