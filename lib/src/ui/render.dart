@@ -242,9 +242,20 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
   }
 
   /// Get the [CellOffset] of the cell that [offset] is in.
+  ///
+  /// A non-finite [offset] resolves to the origin cell instead of throwing: a
+  /// degenerate ancestor transform — a display being reconfigured under a
+  /// running window — turns converted coordinates into NaN or infinity, and
+  /// `~/` throws on both, which would abort whichever gesture asked. One event
+  /// lands on a wrong cell while layout settles; the next one is correct.
   CellOffset getCellOffset(Offset offset) {
-    final x = offset.dx - _padding.left;
-    final y = offset.dy - _padding.top + _scrollOffset;
+    var localOffset = offset;
+    if (!localOffset.isFinite) {
+      localOffset = Offset.zero;
+    }
+
+    final x = localOffset.dx - _padding.left;
+    final y = localOffset.dy - _padding.top + _scrollOffset;
     final row = y ~/ _painter.cellSize.height;
     final col = x ~/ _painter.cellSize.width;
     return CellOffset(
