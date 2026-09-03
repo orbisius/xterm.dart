@@ -330,6 +330,45 @@ void main() {
       expect(cl.length, 0);
     });
 
+    test("trim start keeps every remaining item's index truthful", () {
+      final cl = IndexAwareCircularBuffer<IndexedValue<int>>(10);
+      cl.pushAll(
+        List<int>.generate(10, (index) => index).map(IndexedValue.new),
+      );
+
+      for (var i = 0; i < cl.length; i++) {
+        expect(cl[i].index, i);
+      }
+
+      cl.trimStart(5);
+
+      // `index` is derived from the owner's start, so dropping from the FRONT
+      // has to move that start too — otherwise every survivor reports the
+      // position it held before the trim.
+      for (var i = 0; i < cl.length; i++) {
+        expect(cl[i].index, i);
+      }
+    });
+
+    test("index stays truthful when a trim is followed by pushes", () {
+      final cl = IndexAwareCircularBuffer<IndexedValue<int>>(10);
+      cl.pushAll(
+        List<int>.generate(10, (index) => index).map(IndexedValue.new),
+      );
+
+      cl.trimStart(5);
+      cl.push(IndexedValue(100));
+
+      // A stale start also collides: the pushed item derives its position from
+      // the same value, so it can report one an existing item already claims.
+      final seen = <int>{};
+
+      for (var i = 0; i < cl.length; i++) {
+        expect(cl[i].index, i);
+        expect(seen.add(cl[i].index), true, reason: "duplicate index $i");
+      }
+    });
+
     test('can track index of items', () {
       final cl = IndexAwareCircularBuffer<IndexedValue<int>>(3);
       final item0 = IndexedValue(0);

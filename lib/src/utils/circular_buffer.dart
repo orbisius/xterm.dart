@@ -226,6 +226,13 @@ class IndexAwareCircularBuffer<T extends IndexedItem> {
     if (count > _length) count = _length;
     _startIndex += count;
     _startIndex %= _array.length;
+
+    // Dropping from the FRONT moves the logical start as well as the physical
+    // one. `index` is `_absoluteIndex - _absoluteStartIndex`, so leaving this
+    // behind makes every surviving item report a position `count` too high —
+    // and an anchor built from one then names a row nobody asked for.
+    _absoluteStartIndex += count;
+
     _length -= count;
   }
 
