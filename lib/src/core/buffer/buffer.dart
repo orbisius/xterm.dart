@@ -257,12 +257,43 @@ class Buffer {
   }
 
   void scrollUp(int lines) {
+    _reportAltScreenLinesScrolledOff(lines);
+
     for (var i = absoluteMarginTop; i <= absoluteMarginBottom; i++) {
       if (i <= absoluteMarginBottom - lines) {
         this.lines[i] = this.lines[i + lines];
       } else {
         this.lines[i] = _newEmptyLine();
       }
+    }
+  }
+
+  /// Hands each line the ALTERNATE screen is about to lose to
+  /// [Terminal.onAltScreenLineScrolledOff], while it still holds its content.
+  ///
+  /// Called before the shift above, which is the only moment these lines
+  /// exist: the alternate screen keeps no history, so once they are overwritten
+  /// there is nothing left to read. The main screen retains its lines and is
+  /// skipped by the first check, so it pays one boolean on the scroll path.
+  void _reportAltScreenLinesScrolledOff(int count) {
+    if (!isAltBuffer) {
+      return;
+    }
+
+    final onScrolledOff = terminal.onAltScreenLineScrolledOff;
+
+    if (onScrolledOff == null) {
+      return;
+    }
+
+    for (var offset = 0; offset < count; offset++) {
+      final row = absoluteMarginTop + offset;
+
+      if (row > absoluteMarginBottom) {
+        break;
+      }
+
+      onScrolledOff(lines[row]);
     }
   }
 
