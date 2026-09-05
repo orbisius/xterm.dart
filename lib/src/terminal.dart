@@ -63,6 +63,19 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
   /// escape sequence.
   void Function(String code, List<String> args)? onPrivateOSC;
 
+  /// Function that is called with each line the ALTERNATE screen scrolls off
+  /// its top, in the order the lines leave.
+  ///
+  /// The alternate screen has no scrollback: a line pushed past the top margin
+  /// is overwritten and gone. A host that wants to keep a record of what a
+  /// full-screen program printed — to offer "copy the recent output", or a
+  /// scrollback of its own — has no other point at which that line still
+  /// exists. Not called for the main screen, whose lines are retained.
+  ///
+  /// The line is passed as it was; a host that keeps it should copy what it
+  /// needs, since the buffer may reuse it.
+  void Function(BufferLine line)? onAltScreenLineScrolledOff;
+
   /// Flag to toggle os specific behaviors.
   final TerminalTargetPlatform platform;
 
