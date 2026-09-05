@@ -373,7 +373,24 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
   }
 
   double get _maxScrollExtent {
-    return max(_terminalHeight - _viewportHeight, 0.0);
+    // The alternate screen does not scroll its viewport: the program owns the
+    // wheel, and the handler above turns each notch into input for it.
+    //
+    // Said HERE rather than left to fall out of the line count, because the
+    // routing depends on it. Two nested scrollables compete for a wheel notch
+    // and the INNER one is offered it first; it declines only while it has
+    // nowhere to go. Any extent at all — one published from a previous layout,
+    // or a line count that outgrows the viewport — makes it accept instead, and
+    // the program stops receiving the wheel entirely until the pane relayouts.
+    if (_terminal.isUsingAltBuffer) {
+      return 0.0;
+    }
+
+    final scrollableHeight = _terminalHeight - _viewportHeight;
+
+    final extent = max(scrollableHeight, 0.0);
+
+    return extent;
   }
 
   double get _lineOffset {
