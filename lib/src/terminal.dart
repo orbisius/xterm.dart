@@ -74,6 +74,7 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
   ///
   /// The line is passed as it was; a host that keeps it should copy what it
   /// needs, since the buffer may reuse it.
+  @override
   void Function(BufferLine line)? onAltScreenLineScrolledOff;
 
   /// Flag to toggle os specific behaviors.

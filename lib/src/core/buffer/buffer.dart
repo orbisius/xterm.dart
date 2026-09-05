@@ -252,7 +252,7 @@ class Buffer {
         break;
       }
 
-      onScrolledOff(this.lines[row]);
+      onScrolledOff(lines[row]);
     }
   }
 
