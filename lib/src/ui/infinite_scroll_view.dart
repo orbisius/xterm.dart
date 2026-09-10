@@ -75,17 +75,36 @@ class _RenderInfiniteScrollView extends RenderShiftedBox {
         super(child);
 
   ViewportOffset _position;
+
+  /// Moves the same listener [attach] and [detach] move. A Scrollable swaps its
+  /// position when its dependencies change and disposes the old one, so any
+  /// other listener here leaves [_onScroll] on the dead position and registers
+  /// it on nothing — the offset still moves and no scroll is ever reported
+  /// again, silently, until the render object is re-attached.
   set position(ViewportOffset value) {
-    if (_position == value) return;
-    if (attached) _position.removeListener(markNeedsLayout);
+    if (_position == value) {
+      return;
+    }
+
+    if (attached) {
+      _position.removeListener(_onScroll);
+    }
+
     _position = value;
-    if (attached) _position.addListener(markNeedsLayout);
+
+    if (attached) {
+      _position.addListener(_onScroll);
+    }
+
     markNeedsLayout();
   }
 
   ScrollCallback _scrollCallback;
   set onScroll(ScrollCallback value) {
-    if (_scrollCallback == value) return;
+    if (_scrollCallback == value) {
+      return;
+    }
+
     _scrollCallback = value;
     markNeedsLayout();
   }
