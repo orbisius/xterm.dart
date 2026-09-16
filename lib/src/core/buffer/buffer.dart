@@ -1,5 +1,6 @@
 import 'dart:math' show max, min;
 
+import 'package:xterm/src/core/buffer/alt_screen_scroll.dart';
 import 'package:xterm/src/core/buffer/cell_offset.dart';
 import 'package:xterm/src/core/buffer/line.dart';
 import 'package:xterm/src/core/buffer/range_line.dart';
@@ -216,6 +217,10 @@ class Buffer {
   }
 
   void scrollUp(int lines) {
+    if (isAltBuffer) {
+      _reportAltScreenScroll(lines);
+    }
+
     for (var i = absoluteMarginTop; i <= absoluteMarginBottom; i++) {
       if (i <= absoluteMarginBottom - lines) {
         this.lines[i] = this.lines[i + lines];
@@ -223,6 +228,37 @@ class Buffer {
         this.lines[i] = _newEmptyLine();
       }
     }
+  }
+
+  /// Reports the scroll [scrollUp] is about to perform, while the rows it is
+  /// about to overwrite still hold their content — see [AltScreenScroll].
+  void _reportAltScreenScroll(int count) {
+    if (count <= 0) {
+      return;
+    }
+
+    final onScrolled = terminal.onAltScreenScrolled;
+
+    if (onScrolled == null) {
+      return;
+    }
+
+    final regionHeight = _marginBottom - _marginTop + 1;
+    final lostCount = min(count, regionHeight);
+    final lostLines = <BufferLine>[];
+
+    for (var offset = 0; offset < lostCount; offset++) {
+      lostLines.add(lines[absoluteMarginTop + offset]);
+    }
+
+    final scroll = AltScreenScroll(
+      marginTop: _marginTop,
+      marginBottom: _marginBottom,
+      count: count,
+      lines: lostLines,
+    );
+
+    onScrolled(scroll);
   }
 
   /// https://vt100.net/docs/vt100-ug/chapter3.html#IND IND – Index

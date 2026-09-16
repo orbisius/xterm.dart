@@ -1,3 +1,4 @@
+import 'package:xterm/src/core/buffer/alt_screen_scroll.dart';
 import 'package:xterm/src/core/cursor.dart';
 import 'package:xterm/src/core/mouse/mode.dart';
 
@@ -9,6 +10,8 @@ abstract class TerminalState {
   CursorStyle get cursor;
 
   bool get reflowEnabled;
+
+  void Function(AltScreenScroll scroll)? get onAltScreenScrolled;
 
   /* Modes */
 

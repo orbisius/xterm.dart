@@ -1,6 +1,7 @@
 import 'dart:math' show max;
 
 import 'package:xterm/src/base/observable.dart';
+import 'package:xterm/src/core/buffer/alt_screen_scroll.dart';
 import 'package:xterm/src/core/buffer/buffer.dart';
 import 'package:xterm/src/core/buffer/cell_offset.dart';
 import 'package:xterm/src/core/buffer/line.dart';
@@ -51,6 +52,12 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
   void Function(int width, int height, int pixelWidth, int pixelHeight)?
       onResize;
 
+  /// Function that is called when the alternate screen scrolls, before the rows
+  /// it overwrites are reused. Carries the region that moved and how far, which
+  /// is knowable at no later point — see [AltScreenScroll].
+  @override
+  void Function(AltScreenScroll scroll)? onAltScreenScrolled;
+
   /// The [TerminalInputHandler] used by this terminal. [defaultInputHandler] is
   /// used when not specified. User of this class can provide their own
   /// implementation of [TerminalInputHandler] or extend [defaultInputHandler]
@@ -77,6 +84,7 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
     this.onIconChange,
     this.onOutput,
     this.onResize,
+    this.onAltScreenScrolled,
     this.platform = TerminalTargetPlatform.unknown,
     this.inputHandler = defaultInputHandler,
     this.mouseHandler = defaultMouseHandler,
