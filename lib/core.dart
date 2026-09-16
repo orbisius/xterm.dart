@@ -1,3 +1,4 @@
+export 'src/core/buffer/alt_screen_scroll.dart';
 export 'src/core/buffer/buffer.dart';
 export 'src/core/buffer/cell_flags.dart';
 export 'src/core/buffer/cell_offset.dart';

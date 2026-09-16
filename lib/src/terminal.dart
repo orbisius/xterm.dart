@@ -1,6 +1,7 @@
 import 'dart:math' show max;
 
 import 'package:xterm/src/base/observable.dart';
+import 'package:xterm/src/core/buffer/alt_screen_scroll.dart';
 import 'package:xterm/src/core/buffer/buffer.dart';
 import 'package:xterm/src/core/buffer/cell_offset.dart';
 import 'package:xterm/src/core/buffer/line.dart';
@@ -51,6 +52,12 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
   void Function(int width, int height, int pixelWidth, int pixelHeight)?
       onResize;
 
+  /// Function that is called when the alternate screen scrolls, before the rows
+  /// it overwrites are reused. Carries the region that moved and how far, which
+  /// is knowable at no later point — see [AltScreenScroll].
+  @override
+  void Function(AltScreenScroll scroll)? onAltScreenScrolled;
+
   /// The [TerminalInputHandler] used by this terminal. [defaultInputHandler] is
   /// used when not specified. User of this class can provide their own
   /// implementation of [TerminalInputHandler] or extend [defaultInputHandler]
@@ -62,20 +69,6 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
   /// The callback that is called when the terminal receives a unrecognized
   /// escape sequence.
   void Function(String code, List<String> args)? onPrivateOSC;
-
-  /// Function that is called with each line the ALTERNATE screen scrolls off
-  /// its top, in the order the lines leave.
-  ///
-  /// The alternate screen has no scrollback: a line pushed past the top margin
-  /// is overwritten and gone. A host that wants to keep a record of what a
-  /// full-screen program printed — to offer "copy the recent output", or a
-  /// scrollback of its own — has no other point at which that line still
-  /// exists. Not called for the main screen, whose lines are retained.
-  ///
-  /// The line is passed as it was; a host that keeps it should copy what it
-  /// needs, since the buffer may reuse it.
-  @override
-  void Function(BufferLine line)? onAltScreenLineScrolledOff;
 
   /// Flag to toggle os specific behaviors.
   final TerminalTargetPlatform platform;
@@ -91,6 +84,7 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
     this.onIconChange,
     this.onOutput,
     this.onResize,
+    this.onAltScreenScrolled,
     this.platform = TerminalTargetPlatform.unknown,
     this.inputHandler = defaultInputHandler,
     this.mouseHandler = defaultMouseHandler,

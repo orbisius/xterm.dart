@@ -1,5 +1,6 @@
 import 'dart:math' show max, min;
 
+import 'package:xterm/src/core/buffer/alt_screen_scroll.dart';
 import 'package:xterm/src/core/buffer/cell_offset.dart';
 import 'package:xterm/src/core/buffer/line.dart';
 import 'package:xterm/src/core/buffer/range_line.dart';
@@ -257,7 +258,9 @@ class Buffer {
   }
 
   void scrollUp(int lines) {
-    _reportAltScreenLinesScrolledOff(lines);
+    if (isAltBuffer) {
+      _reportAltScreenScroll(lines);
+    }
 
     for (var i = absoluteMarginTop; i <= absoluteMarginBottom; i++) {
       if (i <= absoluteMarginBottom - lines) {
@@ -268,33 +271,35 @@ class Buffer {
     }
   }
 
-  /// Hands each line the ALTERNATE screen is about to lose to
-  /// [Terminal.onAltScreenLineScrolledOff], while it still holds its content.
-  ///
-  /// Called before the shift above, which is the only moment these lines
-  /// exist: the alternate screen keeps no history, so once they are overwritten
-  /// there is nothing left to read. The main screen retains its lines and is
-  /// skipped by the first check, so it pays one boolean on the scroll path.
-  void _reportAltScreenLinesScrolledOff(int count) {
-    if (!isAltBuffer) {
+  /// Reports the scroll [scrollUp] is about to perform, while the rows it is
+  /// about to overwrite still hold their content — see [AltScreenScroll].
+  void _reportAltScreenScroll(int count) {
+    if (count <= 0) {
       return;
     }
 
-    final onScrolledOff = terminal.onAltScreenLineScrolledOff;
+    final onScrolled = terminal.onAltScreenScrolled;
 
-    if (onScrolledOff == null) {
+    if (onScrolled == null) {
       return;
     }
 
-    for (var offset = 0; offset < count; offset++) {
-      final row = absoluteMarginTop + offset;
+    final regionHeight = _marginBottom - _marginTop + 1;
+    final lostCount = min(count, regionHeight);
+    final lostLines = <BufferLine>[];
 
-      if (row > absoluteMarginBottom) {
-        break;
-      }
-
-      onScrolledOff(lines[row]);
+    for (var offset = 0; offset < lostCount; offset++) {
+      lostLines.add(lines[absoluteMarginTop + offset]);
     }
+
+    final scroll = AltScreenScroll(
+      marginTop: _marginTop,
+      marginBottom: _marginBottom,
+      count: count,
+      lines: lostLines,
+    );
+
+    onScrolled(scroll);
   }
 
   /// https://vt100.net/docs/vt100-ug/chapter3.html#IND IND – Index
