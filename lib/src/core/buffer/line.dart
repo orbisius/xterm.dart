@@ -155,7 +155,11 @@ class BufferLine with IndexedItem {
 
   /// Erase cells whose index satisfies [start] <= index < [end]. Erased cells
   /// are filled with [style].
-  void eraseRange(int start, int end, CursorStyle style) {
+  void eraseRange({
+    required int start,
+    required int end,
+    required CursorStyle style,
+  }) {
     // reset cell one to the left if start is second cell of a wide char
     if (start > 0 && getWidth(start - 1) == 2) {
       eraseCell(start - 1, style);

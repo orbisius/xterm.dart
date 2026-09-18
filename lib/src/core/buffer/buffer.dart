@@ -196,7 +196,7 @@ class Buffer {
     for (var i = absoluteCursorY + 1; i < height; i++) {
       final line = lines[i];
       line.isWrapped = false;
-      line.eraseRange(0, viewWidth, terminal.cursor);
+      line.eraseRange(start: 0, end: viewWidth, style: terminal.cursor);
     }
   }
 
@@ -208,7 +208,7 @@ class Buffer {
     for (var i = 0; i < _cursorY; i++) {
       final line = lines[i + scrollBack];
       line.isWrapped = false;
-      line.eraseRange(0, viewWidth, terminal.cursor);
+      line.eraseRange(start: 0, end: viewWidth, style: terminal.cursor);
     }
   }
 
@@ -217,7 +217,7 @@ class Buffer {
     for (var i = 0; i < viewHeight; i++) {
       final line = lines[i + scrollBack];
       line.isWrapped = false;
-      line.eraseRange(0, viewWidth, terminal.cursor);
+      line.eraseRange(start: 0, end: viewWidth, style: terminal.cursor);
     }
   }
 
@@ -238,26 +238,34 @@ class Buffer {
       currentLine.isWrapped = false;
     }
 
-    currentLine.eraseRange(_cursorX, viewWidth, terminal.cursor);
+    currentLine.eraseRange(
+      start: _cursorX,
+      end: viewWidth,
+      style: terminal.cursor,
+    );
   }
 
   /// Erases the line from the start of the line to the cursor, including the
   /// cursor.
   void eraseLineToCursor() {
     currentLine.isWrapped = false;
-    currentLine.eraseRange(0, _cursorX, terminal.cursor);
+    currentLine.eraseRange(start: 0, end: _cursorX, style: terminal.cursor);
   }
 
   /// Erases the line at the current cursor position.
   void eraseLine() {
     currentLine.isWrapped = false;
-    currentLine.eraseRange(0, viewWidth, terminal.cursor);
+    currentLine.eraseRange(start: 0, end: viewWidth, style: terminal.cursor);
   }
 
   /// Erases [count] cells starting at the cursor position.
   void eraseChars(int count) {
     final start = _cursorX;
-    currentLine.eraseRange(start, start + count, terminal.cursor);
+    currentLine.eraseRange(
+      start: start,
+      end: start + count,
+      style: terminal.cursor,
+    );
   }
 
   void scrollDown(int lines) {
