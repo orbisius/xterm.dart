@@ -28,13 +28,22 @@ class AltScreenScroll {
   /// Last screen row of the region that scrolled.
   final int marginBottom;
 
-  /// How many rows the region moved. Always one or more.
+  /// How far the region moved, SIGNED: positive moved its rows UP, negative
+  /// moved them DOWN. Never zero.
+  ///
+  /// One signed number rather than a distance plus a direction, so every
+  /// consumer stays on the same arithmetic: a row lands at `row - count`
+  /// whichever way the region went, and a host needs no branch to follow it.
   final int count;
 
-  /// The lines the region lost, oldest first.
+  /// The lines the region lost, in SCREEN ORDER — topmost first.
+  ///
+  /// They leave from the edge the region moved away from: its first rows when
+  /// [count] is positive, its last rows when negative. Screen order rather than
+  /// order-of-loss so a host can lay them out without knowing the direction.
   ///
   /// They hold their content only until the caller returns — the buffer reuses
   /// the rows immediately after — so a host that keeps anything copies it here.
-  /// Shorter than [count] when the region has fewer rows than it scrolled by.
+  /// Shorter than `count.abs()` when the region has fewer rows than it moved by.
   final List<BufferLine> lines;
 }
