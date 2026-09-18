@@ -224,7 +224,20 @@ class Buffer {
   /// Erases the line from the cursor to the end of the line, including the
   /// cursor position.
   void eraseLineFromCursor() {
-    currentLine.isWrapped = false;
+    // The wrap flag records how this row BEGAN — that the row above it ran past
+    // the right margin into this one. Erasing the row's TAIL cannot change that,
+    // so only an erase starting at column 0, which replaces the row's
+    // beginning, clears it.
+    //
+    // Clearing it unconditionally loses a wrapped line for good: a full-screen
+    // program appends this erase to nearly every row it paints, so the terminal
+    // wraps a long line correctly and the very next escape sequence throws away
+    // the record that it did. [getText] then puts a newline in the middle of a
+    // line the screen shows as one.
+    if (_cursorX == 0) {
+      currentLine.isWrapped = false;
+    }
+
     currentLine.eraseRange(_cursorX, viewWidth, terminal.cursor);
   }
 
