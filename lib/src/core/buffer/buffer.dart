@@ -269,6 +269,14 @@ class Buffer {
   }
 
   void scrollDown(int lines) {
+    if (isAltBuffer) {
+      _reportAltScreenScroll(
+        regionTop: _marginTop,
+        regionBottom: _marginBottom,
+        count: -lines,
+      );
+    }
+
     for (var i = absoluteMarginBottom; i >= absoluteMarginTop; i--) {
       if (i >= absoluteMarginTop + lines) {
         this.lines[i] = this.lines[i - lines];
@@ -280,7 +288,11 @@ class Buffer {
 
   void scrollUp(int lines) {
     if (isAltBuffer) {
-      _reportAltScreenScroll(lines);
+      _reportAltScreenScroll(
+        regionTop: _marginTop,
+        regionBottom: _marginBottom,
+        count: lines,
+      );
     }
 
     for (var i = absoluteMarginTop; i <= absoluteMarginBottom; i++) {
@@ -294,8 +306,12 @@ class Buffer {
 
   /// Reports the scroll [scrollUp] is about to perform, while the rows it is
   /// about to overwrite still hold their content — see [AltScreenScroll].
-  void _reportAltScreenScroll(int count) {
-    if (count <= 0) {
+  void _reportAltScreenScroll({
+    required int regionTop,
+    required int regionBottom,
+    required int count,
+  }) {
+    if (count == 0) {
       return;
     }
 
@@ -305,17 +321,31 @@ class Buffer {
       return;
     }
 
-    final regionHeight = _marginBottom - _marginTop + 1;
-    final lostCount = min(count, regionHeight);
+    final regionHeight = regionBottom - regionTop + 1;
+
+    var lostCount = count.abs();
+
+    if (lostCount > regionHeight) {
+      lostCount = regionHeight;
+    }
+
+    // Rows leave from the edge the region moved AWAY from — the top when it
+    // moved up, the bottom when it moved down.
+    var firstLostRow = regionTop;
+
+    if (count < 0) {
+      firstLostRow = regionBottom - lostCount + 1;
+    }
+
     final lostLines = <BufferLine>[];
 
     for (var offset = 0; offset < lostCount; offset++) {
-      lostLines.add(lines[absoluteMarginTop + offset]);
+      lostLines.add(lines[scrollBack + firstLostRow + offset]);
     }
 
     final scroll = AltScreenScroll(
-      marginTop: _marginTop,
-      marginBottom: _marginBottom,
+      marginTop: regionTop,
+      marginBottom: regionBottom,
       count: count,
       lines: lostLines,
     );
@@ -498,6 +528,16 @@ class Buffer {
     // Number of lines to move up.
     final linesToMove = linesBelow - linesToInsert;
 
+    // Rows from the cursor down move DOWN by the inserted count, so the region
+    // that moves starts at the CURSOR, not at the top margin.
+    if (isAltBuffer) {
+      _reportAltScreenScroll(
+        regionTop: _cursorY,
+        regionBottom: _marginBottom,
+        count: -linesToInsert,
+      );
+    }
+
     for (var i = 0; i < linesToMove; i++) {
       final index = absoluteMarginBottom - i;
       lines[index] = lines.swap(index - linesToInsert, _newEmptyLine());
@@ -519,6 +559,16 @@ class Buffer {
     setCursorX(0);
 
     count = min(count, absoluteMarginBottom - absoluteCursorY + 1);
+
+    // Rows from the cursor down move UP by the deleted count, so the region
+    // that moves starts at the CURSOR, not at the top margin.
+    if (isAltBuffer) {
+      _reportAltScreenScroll(
+        regionTop: _cursorY,
+        regionBottom: _marginBottom,
+        count: count,
+      );
+    }
 
     final linesToMove = absoluteMarginBottom - absoluteCursorY + 1 - count;
 
