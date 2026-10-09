@@ -257,6 +257,13 @@ class EscapeParser {
   /// object allocations.
   final _csi = _Csi(finalByte: 0, params: [], subParams: []);
 
+  /// The largest value a CSI parameter can hold. Digits past it stop growing
+  /// the parameter, so reading one can never overflow, and every count a
+  /// program can send — REP's repeats, a line or character mover's distance —
+  /// stays bounded. Far above any real screen size, so no genuine sequence
+  /// reaches it.
+  static const _maxCsiParamValue = 65535;
+
   /// Parse a CSI from the head of the queue. Return false if the CSI isn't
   /// complete. After a CSI is successfully parsed, [_csi] is updated.
   bool _consumeCsi() {
@@ -330,6 +337,11 @@ class EscapeParser {
 
         param *= 10;
         param += digit;
+
+        if (param > _maxCsiParamValue) {
+          param = _maxCsiParamValue;
+        }
+
         continue;
       }
 
@@ -398,6 +410,19 @@ class EscapeParser {
     '@'.codeUnitAt(0): _csiHandleInsertBlankCharacters,
   });
 
+  /// The first CSI parameter read as a count. A missing parameter and 0 both
+  /// mean 1: count sequences default to one, and a program sends 0 to ask for
+  /// that default, never for none.
+  int _readCount() {
+    var count = 1;
+
+    if (_csi.params.isNotEmpty && _csi.params[0] != 0) {
+      count = _csi.params[0];
+    }
+
+    return count;
+  }
+
   /// `ESC [ Ps a` Cursor Horizontal Position Relative (HPR)
   ///
   /// https://terminalguide.namepad.de/seq/csi_sa/
@@ -413,13 +438,7 @@ class EscapeParser {
   ///
   /// https://terminalguide.namepad.de/seq/csi_sb/
   void _csiHandleRepeatPreviousCharacter() {
-    var amount = 1;
-
-    if (_csi.params.isNotEmpty) {
-      amount = _csi.params[0];
-      if (amount == 0) amount = 1;
-    }
-
+    final amount = _readCount();
     handler.repeatPreviousCharacter(amount);
   }
 
@@ -926,13 +945,7 @@ class EscapeParser {
   ///
   /// https://terminalguide.namepad.de/seq/csi_ca/
   void _csiHandleCursorUp() {
-    var amount = 1;
-
-    if (_csi.params.isNotEmpty) {
-      amount = _csi.params[0];
-      if (amount == 0) amount = 1;
-    }
-
+    final amount = _readCount();
     handler.moveCursorY(-amount);
   }
 
@@ -940,13 +953,7 @@ class EscapeParser {
   ///
   /// https://terminalguide.namepad.de/seq/csi_cb/
   void _csiHandleCursorDown() {
-    var amount = 1;
-
-    if (_csi.params.isNotEmpty) {
-      amount = _csi.params[0];
-      if (amount == 0) amount = 1;
-    }
-
+    final amount = _readCount();
     handler.moveCursorY(amount);
   }
 
@@ -954,13 +961,7 @@ class EscapeParser {
   ///
   /// Cursor Right (CUF)
   void _csiHandleCursorForward() {
-    var amount = 1;
-
-    if (_csi.params.isNotEmpty) {
-      amount = _csi.params[0];
-      if (amount == 0) amount = 1;
-    }
-
+    final amount = _readCount();
     handler.moveCursorX(amount);
   }
 
@@ -968,13 +969,7 @@ class EscapeParser {
   ///
   /// https://terminalguide.namepad.de/seq/csi_cd/
   void _csiHandleCursorBackward() {
-    var amount = 1;
-
-    if (_csi.params.isNotEmpty) {
-      amount = _csi.params[0];
-      if (amount == 0) amount = 1;
-    }
-
+    final amount = _readCount();
     handler.moveCursorX(-amount);
   }
 
@@ -982,13 +977,7 @@ class EscapeParser {
   ///
   /// https://terminalguide.namepad.de/seq/csi_ce/
   void _csiHandleCursorNextLine() {
-    var amount = 1;
-
-    if (_csi.params.isNotEmpty) {
-      amount = _csi.params[0];
-      if (amount == 0) amount = 1;
-    }
-
+    final amount = _readCount();
     handler.cursorNextLine(amount);
   }
 
@@ -996,13 +985,7 @@ class EscapeParser {
   ///
   /// https://terminalguide.namepad.de/seq/csi_cf/
   void _csiHandleCursorPrecedingLine() {
-    var amount = 1;
-
-    if (_csi.params.isNotEmpty) {
-      amount = _csi.params[0];
-      if (amount == 0) amount = 1;
-    }
-
+    final amount = _readCount();
     handler.cursorPrecedingLine(amount);
   }
 
@@ -1063,12 +1046,7 @@ class EscapeParser {
   ///
   /// https://terminalguide.namepad.de/seq/csi_cl/
   void _csiHandleInsertLines() {
-    var amount = 1;
-
-    if (_csi.params.isNotEmpty) {
-      amount = _csi.params[0];
-    }
-
+    final amount = _readCount();
     handler.insertLines(amount);
   }
 
@@ -1076,12 +1054,7 @@ class EscapeParser {
   ///
   /// https://terminalguide.namepad.de/seq/csi_cm/
   void _csiHandleDeleteLines() {
-    var amount = 1;
-
-    if (_csi.params.isNotEmpty) {
-      amount = _csi.params[0];
-    }
-
+    final amount = _readCount();
     handler.deleteLines(amount);
   }
 
@@ -1089,12 +1062,7 @@ class EscapeParser {
   ///
   /// https://terminalguide.namepad.de/seq/csi_cp/
   void _csiHandleDelete() {
-    var amount = 1;
-
-    if (_csi.params.isNotEmpty) {
-      amount = _csi.params[0];
-    }
-
+    final amount = _readCount();
     handler.deleteChars(amount);
   }
 
@@ -1102,12 +1070,7 @@ class EscapeParser {
   ///
   /// https://terminalguide.namepad.de/seq/csi_cs/
   void _csiHandleScrollUp() {
-    var amount = 1;
-
-    if (_csi.params.isNotEmpty) {
-      amount = _csi.params[0];
-    }
-
+    final amount = _readCount();
     handler.scrollUp(amount);
   }
 
@@ -1115,12 +1078,7 @@ class EscapeParser {
   ///
   /// https://terminalguide.namepad.de/seq/csi_ct_1param/
   void _csiHandleScrollDown() {
-    var amount = 1;
-
-    if (_csi.params.isNotEmpty) {
-      amount = _csi.params[0];
-    }
-
+    final amount = _readCount();
     handler.scrollDown(amount);
   }
 
@@ -1128,12 +1086,7 @@ class EscapeParser {
   ///
   /// https://terminalguide.namepad.de/seq/csi_cx/
   void _csiHandleEraseCharacters() {
-    var amount = 1;
-
-    if (_csi.params.isNotEmpty) {
-      amount = _csi.params[0];
-    }
-
+    final amount = _readCount();
     handler.eraseChars(amount);
   }
 
@@ -1145,12 +1098,7 @@ class EscapeParser {
   /// contents to the right. The contents of the amount right-most columns in
   /// the scroll region are lost. The cursor position is not changed.
   void _csiHandleInsertBlankCharacters() {
-    var amount = 1;
-
-    if (_csi.params.isNotEmpty) {
-      amount = _csi.params[0];
-    }
-
+    final amount = _readCount();
     handler.insertBlankChars(amount);
   }
 
