@@ -693,13 +693,13 @@ class MockEscapeHandler extends _i1.Mock implements _i2.EscapeHandler {
       );
 
   @override
-  void resize(
+  void requestResize(
     int? cols,
     int? rows,
   ) =>
       super.noSuchMethod(
         Invocation.method(
-          #resize,
+          #requestResize,
           [
             cols,
             rows,

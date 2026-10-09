@@ -11,7 +11,7 @@ void main() {
     test('can parse window manipulation', () {
       final parser = EscapeParser(MockEscapeHandler());
       parser.write('\x1b[8;24;80t');
-      verify(parser.handler.resize(80, 24));
+      verify(parser.handler.requestResize(80, 24));
     });
 
     // SGR 22 is "normal intensity", which ends bold as well as faint. Missing

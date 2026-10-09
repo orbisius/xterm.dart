@@ -156,7 +156,9 @@ abstract class EscapeHandler {
 
   void setUnknownDecMode(int mode, bool enabled);
 
-  void resize(int cols, int rows);
+  /// A program asked for a screen of [cols] by [rows]. Any output can carry
+  /// this, so it is a request to judge, never a size to apply.
+  void requestResize(int cols, int rows);
 
   void sendSize();
 
