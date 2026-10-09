@@ -331,8 +331,8 @@ class _TerminalDebuggerHandler implements EscapeHandler {
   }
 
   @override
-  void resize(int cols, int rows) {
-    onCommand('resize($cols, $rows)');
+  void requestResize(int cols, int rows) {
+    onCommand('requestResize($cols, $rows)');
   }
 
   @override

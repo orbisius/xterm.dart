@@ -196,6 +196,39 @@ void main() {
       expect(lastData, isNull);
     });
   });
+
+  group('Terminal.onResizeRequest', () {
+    // Any output can carry this request — a file being `cat`ed, a remote host —
+    // and its size has no ceiling, so obeying it hands that output control of
+    // how much memory the terminal holds.
+    test('a program cannot resize the terminal', () {
+      final terminal = Terminal();
+
+      terminal.write('\x1b[8;50;10000t');
+
+      expect(terminal.viewWidth, 80);
+      expect(terminal.viewHeight, 24);
+    });
+
+    // The embedder is the one that decides, so it has to hear the size the
+    // program asked for, columns first; and hearing it must not resize the
+    // terminal behind its back.
+    test('hands the request to the embedder', () {
+      final requests = <String>[];
+
+      void recordRequest(int width, int height) {
+        requests.add('${width}x$height');
+      }
+
+      final terminal = Terminal(onResizeRequest: recordRequest);
+
+      terminal.write('\x1b[8;50;100t');
+
+      expect(requests, ['100x50']);
+      expect(terminal.viewWidth, 80);
+      expect(terminal.viewHeight, 24);
+    });
+  });
 }
 
 class _TestInputHandler implements TerminalInputHandler {

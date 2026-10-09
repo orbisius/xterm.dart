@@ -47,6 +47,12 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
   /// [keyInput], [mouseInput], or [paste].
   void Function(String data)? onOutput;
 
+  /// Function that is called when the program asks for the terminal to be
+  /// [width] columns by [height] rows. The terminal does not resize itself,
+  /// because any output can ask; call [resize] from here to agree. If not set,
+  /// the request is ignored.
+  void Function(int width, int height)? onResizeRequest;
+
   /// Function that is called when the dimensions of the terminal change.
   void Function(int width, int height, int pixelWidth, int pixelHeight)?
       onResize;
@@ -76,6 +82,7 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
     this.onTitleChange,
     this.onIconChange,
     this.onOutput,
+    this.onResizeRequest,
     this.onResize,
     this.platform = TerminalTargetPlatform.unknown,
     this.inputHandler = defaultInputHandler,
@@ -349,7 +356,6 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
   /// Resize the terminal screen. [newWidth] and [newHeight] should be greater
   /// than 0. Text reflow is currently not implemented and will be avaliable in
   /// the future.
-  @override
   void resize(
     int newWidth,
     int newHeight, [
@@ -639,6 +645,11 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
   @override
   void insertBlankChars(int amount) {
     _buffer.insertBlankChars(amount);
+  }
+
+  @override
+  void requestResize(int cols, int rows) {
+    onResizeRequest?.call(cols, rows);
   }
 
   @override
