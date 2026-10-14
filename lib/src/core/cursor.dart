@@ -11,6 +11,11 @@ class CursorStyle {
 
   static final empty = CursorStyle();
 
+  /// The bits a palette index or one RGB component may occupy.
+  /// `value & ~_colorByteMask` is non-zero exactly when the value is above 255
+  /// or below 0, since a negative int has all its high bits set.
+  static const _colorByteMask = 0xff;
+
   void setBold() {
     attrs |= CellAttr.bold;
   }
@@ -94,10 +99,23 @@ class CursorStyle {
   }
 
   void setForegroundColor256(int color) {
+    // An index outside 0..255 has no palette entry to paint, so the color
+    // stays as it was.
+    if ((color & ~_colorByteMask) != 0) {
+      return;
+    }
+
     foreground = color | CellColor.palette;
   }
 
   void setForegroundColorRgb(int r, int g, int b) {
+    // A component outside 0..255 would spill into its neighbor or into the
+    // color type, so the color stays as it was. A bit outside the mask in any
+    // component survives the OR, so one test covers all three.
+    if (((r | g | b) & ~_colorByteMask) != 0) {
+      return;
+    }
+
     foreground = (r << 16) | (g << 8) | b | CellColor.rgb;
   }
 
@@ -110,10 +128,23 @@ class CursorStyle {
   }
 
   void setBackgroundColor256(int color) {
+    // An index outside 0..255 has no palette entry to paint, so the color
+    // stays as it was.
+    if ((color & ~_colorByteMask) != 0) {
+      return;
+    }
+
     background = color | CellColor.palette;
   }
 
   void setBackgroundColorRgb(int r, int g, int b) {
+    // A component outside 0..255 would spill into its neighbor or into the
+    // color type, so the color stays as it was. A bit outside the mask in any
+    // component survives the OR, so one test covers all three.
+    if (((r | g | b) & ~_colorByteMask) != 0) {
+      return;
+    }
+
     background = (r << 16) | (g << 8) | b | CellColor.rgb;
   }
 
