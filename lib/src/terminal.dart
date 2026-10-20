@@ -341,16 +341,26 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
     }
   }
 
-  // Handle a mouse event and return true if it was handled.
+  /// Handles a mouse event at the BUFFER cell [position] — what hit-testing
+  /// returns — and returns true if it was handled.
+  ///
+  /// A program counts rows from the top of its screen, so the row is reported
+  /// relative to the screen: with lines kept above it, a buffer row and a
+  /// screen row differ by [Buffer.scrollBack], and a click would otherwise name
+  /// a row the program never drew.
   bool mouseInput(
     TerminalMouseButton button,
     TerminalMouseButtonState buttonState,
     CellOffset position,
   ) {
+    final rowOnScreen = position.y - buffer.scrollBack;
+    final clampedRowOnScreen = rowOnScreen.clamp(0, viewHeight - 1);
+    final screenPosition = CellOffset(position.x, clampedRowOnScreen);
+
     final output = mouseHandler?.call(TerminalMouseEvent(
       button: button,
       buttonState: buttonState,
-      position: position,
+      position: screenPosition,
       state: this,
       platform: platform,
     ));
@@ -381,10 +391,6 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
 
     _viewWidth = newWidth;
     _viewHeight = newHeight;
-
-    if (buffer == _altBuffer) {
-      buffer.clearScrollback();
-    }
 
     _altBuffer.resetVerticalMargins();
     _mainBuffer.resetVerticalMargins();

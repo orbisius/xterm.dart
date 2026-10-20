@@ -48,6 +48,11 @@ void main() {
     expect(firstScroll.marginBottom, 9, reason: 'a 10-row screen ends at 9');
     expect(firstScroll.count, 1);
     expect(firstScroll.lines.length, 1);
+
+    // The line stays above the screen, and the report says so, so a host can
+    // tell it apart from a line that is gone.
+    expect(firstScroll.isRetained, isTrue);
+    expect(wired.terminal.buffer.scrollBack, 3);
   });
 
   test('a scroll REGION reports its own margins, not the screen', () {
@@ -84,6 +89,12 @@ void main() {
       1,
       reason: 'one line feed scrolls the region by one row',
     );
+
+    expect(
+      firstScroll.isRetained,
+      isFalse,
+      reason: 'a region below the top row overwrites what it pushes out',
+    );
   });
 
   test('a multi-row scroll reports its distance and every lost line', () {
@@ -106,6 +117,7 @@ void main() {
 
     expect(scroll.count, 3);
     expect(scroll.lines.length, 3);
+    expect(scroll.isRetained, isFalse, reason: 'SU destroys what it scrolls');
 
     final lostTexts = <String>[];
 

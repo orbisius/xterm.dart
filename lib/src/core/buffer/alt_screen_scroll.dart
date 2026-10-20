@@ -2,12 +2,10 @@ import 'package:xterm/src/core/buffer/line.dart';
 
 /// One scroll of the alternate screen, reported as it happens.
 ///
-/// The alternate screen keeps no scrollback, so a line pushed past the top of
-/// the scrolled region is overwritten and gone. A host that wants to keep what
-/// a full-screen program printed, or to keep a selection on the text it was
-/// made on, has no other point at which the movement is knowable: the buffer
-/// afterwards shows only the result, and nothing in the byte stream says how
-/// far anything moved.
+/// A host that keeps a selection on the text it was made on has no other point
+/// at which the movement is knowable: the buffer afterwards shows only the
+/// result, and nothing in the byte stream says how far anything moved. Once the
+/// buffer is full, a line kept as history does not even change its height.
 ///
 /// Both margins are SCREEN rows, so a host reads them against what it is
 /// drawing. A region narrower than the screen is the normal case rather than
@@ -20,6 +18,7 @@ class AltScreenScroll {
     required this.marginBottom,
     required this.count,
     required this.lines,
+    this.isRetained = false,
   });
 
   /// First screen row of the region that scrolled.
@@ -42,8 +41,14 @@ class AltScreenScroll {
   /// [count] is positive, its last rows when negative. Screen order rather than
   /// order-of-loss so a host can lay them out without knowing the direction.
   ///
-  /// They hold their content only until the caller returns — the buffer reuses
-  /// the rows immediately after — so a host that keeps anything copies it here.
-  /// Shorter than `count.abs()` when the region has fewer rows than it moved by.
+  /// A destroyed line holds its content only until the caller returns — the
+  /// buffer reuses it right after — so a host that keeps anything copies it
+  /// here. Shorter than `count.abs()` when the region has fewer rows than it
+  /// moved by.
   final List<BufferLine> lines;
+
+  /// Whether [lines] stay in the buffer above the screen, as history, instead
+  /// of being destroyed. True only for a line feed at the bottom of a region
+  /// that starts at the top row.
+  final bool isRetained;
 }

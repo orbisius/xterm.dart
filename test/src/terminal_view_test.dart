@@ -426,8 +426,15 @@ void main() {
       final terminal = Terminal(onOutput: terminalOutput.add);
       terminal.useAltBuffer();
 
+      // Arrow keys are what the wheel becomes on the program's path, which a
+      // program that did not ask for the wheel reaches only through this.
       await tester.pumpWidget(MaterialApp(
-        home: TerminalView(terminal, autofocus: true, simulateScroll: true),
+        home: TerminalView(
+          terminal,
+          autofocus: true,
+          simulateScroll: true,
+          altScreenWheelFallback: AltScreenWheelFallback.sendToProgram,
+        ),
       ));
 
       await tester.drag(find.byType(TerminalView), const Offset(0, -100));
@@ -441,7 +448,12 @@ void main() {
       terminal.useAltBuffer();
 
       await tester.pumpWidget(MaterialApp(
-        home: TerminalView(terminal, autofocus: true, simulateScroll: false),
+        home: TerminalView(
+          terminal,
+          autofocus: true,
+          simulateScroll: false,
+          altScreenWheelFallback: AltScreenWheelFallback.sendToProgram,
+        ),
       ));
 
       await tester.drag(find.byType(TerminalView), const Offset(0, -100));

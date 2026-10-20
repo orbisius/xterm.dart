@@ -56,7 +56,9 @@ void main() {
 
   /// Switches to the alternate screen and paints it, as a TUI does.
   void enterAltScreen() {
-    terminal.write('\x1b[?1049h');
+    // The program asks for the wheel; one that does not has its history
+    // scrolled instead.
+    terminal.write('\x1b[?1049h\x1b[?1000h');
 
     for (var lineNumber = 0; lineNumber < 12; lineNumber++) {
       terminal.write('alt $lineNumber\r\n');

@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:xterm/core.dart';
+import 'package:xterm/src/ui/alt_screen_wheel_fallback.dart';
 import 'package:xterm/src/ui/infinite_scroll_view.dart';
 
 /// Handles scrolling gestures in the alternate screen buffer. In alternate
@@ -13,6 +14,7 @@ class TerminalScrollGestureHandler extends StatefulWidget {
     required this.getCellOffset,
     required this.getLineHeight,
     this.simulateScroll = true,
+    this.altScreenWheelFallback = AltScreenWheelFallback.scrollHistory,
     required this.child,
   });
 
@@ -31,6 +33,10 @@ class TerminalScrollGestureHandler extends StatefulWidget {
   /// doesn't declare it supports mouse wheel events. true by default as it
   /// is the default behavior of most terminals.
   final bool simulateScroll;
+
+  /// Where the wheel goes on the alternate screen when the program did not ask
+  /// for it.
+  final AltScreenWheelFallback altScreenWheelFallback;
 
   /// The most lines one scroll callback may turn into events.
   ///
@@ -53,9 +59,9 @@ class TerminalScrollGestureHandler extends StatefulWidget {
 
 class _TerminalScrollGestureHandlerState
     extends State<TerminalScrollGestureHandler> {
-  /// Whether the application is in alternate screen buffer. If false, then this
-  /// widget does nothing.
-  var isAltBuffer = false;
+  /// Whether the wheel goes to the program instead of moving the view — see
+  /// [_resolveProgramOwnsWheel]. While false this widget does nothing.
+  var programOwnsWheel = false;
 
   /// The variable that tracks the line offset in last scroll event. Used to
   /// determine how many the scroll events should be sent to the terminal.
@@ -71,7 +77,7 @@ class _TerminalScrollGestureHandlerState
   @override
   void initState() {
     widget.terminal.addListener(_onTerminalUpdated);
-    isAltBuffer = widget.terminal.isUsingAltBuffer;
+    programOwnsWheel = _resolveProgramOwnsWheel();
     super.initState();
   }
 
@@ -86,16 +92,50 @@ class _TerminalScrollGestureHandlerState
     if (oldWidget.terminal != widget.terminal) {
       oldWidget.terminal.removeListener(_onTerminalUpdated);
       widget.terminal.addListener(_onTerminalUpdated);
-      isAltBuffer = widget.terminal.isUsingAltBuffer;
     }
+
+    _takeWheelOwnership();
+
     super.didUpdateWidget(oldWidget);
   }
 
   void _onTerminalUpdated() {
-    if (isAltBuffer != widget.terminal.isUsingAltBuffer) {
-      isAltBuffer = widget.terminal.isUsingAltBuffer;
-      setState(() {});
+    final ownsWheel = _resolveProgramOwnsWheel();
+
+    if (ownsWheel == programOwnsWheel) {
+      return;
     }
+
+    setState(_takeWheelOwnership);
+  }
+
+  /// Re-reads who owns the wheel. The count of lines already sent starts over,
+  /// because the scroll view that counted them is built afresh.
+  void _takeWheelOwnership() {
+    programOwnsWheel = _resolveProgramOwnsWheel();
+    lastLineOffset = 0;
+  }
+
+  /// Whether the wheel goes to the program: never on the main screen; on the
+  /// alternate screen when the program asked for it — mouse reporting or
+  /// DECSET 1007 — or when the host sends it there regardless.
+  bool _resolveProgramOwnsWheel() {
+    final terminal = widget.terminal;
+
+    if (!terminal.isUsingAltBuffer) {
+      return false;
+    }
+
+    final fallback = widget.altScreenWheelFallback;
+
+    if (fallback == AltScreenWheelFallback.sendToProgram) {
+      return true;
+    }
+
+    final programAskedForWheel =
+        terminal.mouseMode.reportScroll || terminal.altBufferMouseScrollMode;
+
+    return programAskedForWheel;
   }
 
   /// Send a single scroll event to the terminal. If [simulateScroll] is true,
@@ -138,23 +178,40 @@ class _TerminalScrollGestureHandlerState
     lastLineOffset = currentLineOffset;
   }
 
+  void _recordPointerPosition(PointerEvent event) {
+    lastGlobalPointerPosition = event.position;
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (!isAltBuffer) {
+    if (!programOwnsWheel) {
       return widget.child;
     }
 
-    return Listener(
-      onPointerSignal: (event) {
-        lastGlobalPointerPosition = event.position;
-      },
-      onPointerDown: (event) {
-        lastGlobalPointerPosition = event.position;
-      },
-      child: InfiniteScrollView(
-        onScroll: _onScroll,
-        child: widget.child,
-      ),
+    // The view below must decline the wheel: with history to scroll, it is
+    // offered each notch first and would take it before this handler sees it.
+    // A copy keeps every other setting the host gave scrolling.
+    final scrollBehavior = ScrollConfiguration.of(context);
+    final wheelDecliningBehavior = scrollBehavior.copyWith(
+      physics: const NeverScrollableScrollPhysics(),
     );
+
+    final wheelDecliningChild = ScrollConfiguration(
+      behavior: wheelDecliningBehavior,
+      child: widget.child,
+    );
+
+    final wheelForProgram = InfiniteScrollView(
+      onScroll: _onScroll,
+      child: wheelDecliningChild,
+    );
+
+    final pointerTrackingView = Listener(
+      onPointerSignal: _recordPointerPosition,
+      onPointerDown: _recordPointerPosition,
+      child: wheelForProgram,
+    );
+
+    return pointerTrackingView;
   }
 }

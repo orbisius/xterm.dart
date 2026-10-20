@@ -22,7 +22,11 @@ void main() {
         terminal.write('row $row\r\n');
       }
 
-      expect(terminal.buffer.lines.length, 24);
+      expect(
+        terminal.buffer.scrollBack,
+        17,
+        reason: '40 rows on a 24-row screen: 17 scrolled off and are kept',
+      );
       expect(terminal.buffer.lines[0].attached, isTrue);
       expect(terminal.buffer.lines[23].attached, isTrue);
     });
@@ -40,12 +44,16 @@ void main() {
 
       terminal.write('SELECT THIS LINE');
 
+      // The screen's last row sits below the rows that scrolled off, so the
+      // selection is made on the cursor's BUFFER row, not on screen row 23.
+      final cursorRow = terminal.buffer.absoluteCursorY;
+
       final base = terminal.buffer.createAnchorFromOffset(
-        const CellOffset(0, 23),
+        CellOffset(0, cursorRow),
       );
 
       final extent = terminal.buffer.createAnchorFromOffset(
-        const CellOffset(16, 23),
+        CellOffset(16, cursorRow),
       );
 
       controller.setSelection(base, extent);

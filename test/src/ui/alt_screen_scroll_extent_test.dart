@@ -2,18 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xterm/xterm.dart';
 
-/// PINS that the alternate screen's viewport reports NO scroll extent, and that
-/// the main screen's still does.
+/// PINS that both screens report the scroll extent their rows need.
 ///
-/// Two nested scrollables compete for one wheel notch and the INNER one is
-/// offered it first, declining only while it has nowhere to go. Any extent at
-/// all makes it accept instead, and the running program stops receiving the
-/// wheel — scrolling that appears dead until the pane happens to relayout.
+/// The alternate screen used to report none, because a zero extent was what
+/// kept the wheel for the program. It keeps history now, so the extent is
+/// real, and a program that asks for the wheel keeps it by the handler's own
+/// routing — `alt_screen_wheel_route_test.dart`.
 ///
 /// The terminal is given more rows than the box can show, with autoResize off
-/// so nothing corrects the mismatch. That is precisely the state in which the
-/// extent is otherwise non-zero, and it stands in for the same condition
-/// reached by an extent left over from an earlier layout.
+/// so nothing corrects the mismatch.
 void main() {
   const viewWidth = 400.0;
   const viewHeight = 300.0;
@@ -54,7 +51,9 @@ void main() {
     return scrollController;
   }
 
-  testWidgets('the alternate screen viewport cannot scroll', (tester) async {
+  testWidgets('the alternate screen viewport scrolls like the main one', (
+    tester,
+  ) async {
     final terminal = Terminal(maxLines: 1000);
 
     final scrollController = await pumpOversizedTerminal(
@@ -70,8 +69,8 @@ void main() {
 
     expect(
       scrollController.position.maxScrollExtent,
-      0.0,
-      reason: 'a scrollable alt viewport takes the wheel from the program',
+      greaterThan(0.0),
+      reason: 'rows beyond the box give the alternate screen an extent too',
     );
   });
 

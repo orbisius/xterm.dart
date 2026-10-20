@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
+import 'package:xterm/src/core/buffer/buffer.dart';
 import 'package:xterm/src/core/buffer/cell_offset.dart';
 import 'package:xterm/src/core/buffer/line.dart';
 import 'package:xterm/src/core/buffer/range.dart';
@@ -234,6 +235,10 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
 
   var _stickToBottom = true;
 
+  /// The buffer the last layout showed, so a switch between the main and the
+  /// alternate screen is told apart from ordinary output.
+  Buffer? _laidOutBuffer;
+
   /// The drag happening RIGHT NOW: the anchor it started from and the last
   /// pointer position it was extended to, both null between drags.
   ///
@@ -399,6 +404,15 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
     _updateViewportSize();
 
     _updateScrollOffset();
+
+    final buffer = _terminal.buffer;
+
+    // A switch of screens starts at the newest line: the scroll position the
+    // view had named rows of the buffer that is no longer showing.
+    if (!identical(buffer, _laidOutBuffer)) {
+      _laidOutBuffer = buffer;
+      _stickToBottom = true;
+    }
 
     if (_stickToBottom) {
       _offset.correctBy(_maxScrollExtent - _scrollOffset);
@@ -688,20 +702,9 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
     return size.height - _padding.vertical;
   }
 
+  /// The same on both screens: the alternate screen keeps history too. Who gets
+  /// the wheel there is [TerminalScrollGestureHandler]'s decision.
   double get _maxScrollExtent {
-    // The alternate screen does not scroll its viewport: the program owns the
-    // wheel, and the handler above turns each notch into input for it.
-    //
-    // Said HERE rather than left to fall out of the line count, because the
-    // routing depends on it. Two nested scrollables compete for a wheel notch
-    // and the INNER one is offered it first; it declines only while it has
-    // nowhere to go. Any extent at all — one published from a previous layout,
-    // or a line count that outgrows the viewport — makes it accept instead, and
-    // the program stops receiving the wheel entirely until the pane relayouts.
-    if (_terminal.isUsingAltBuffer) {
-      return 0.0;
-    }
-
     final scrollableHeight = _terminalHeight - _viewportHeight;
 
     final extent = max(scrollableHeight, 0.0);

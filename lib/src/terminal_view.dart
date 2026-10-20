@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:xterm/src/core/buffer/cell_offset.dart';
 import 'package:xterm/src/core/input/keys.dart';
 import 'package:xterm/src/terminal.dart';
+import 'package:xterm/src/ui/alt_screen_wheel_fallback.dart';
 import 'package:xterm/src/ui/controller.dart';
 import 'package:xterm/src/ui/cursor_type.dart';
 import 'package:xterm/src/ui/custom_text_edit.dart';
@@ -49,6 +50,7 @@ class TerminalView extends StatefulWidget {
     this.readOnly = false,
     this.hardwareKeyboardOnly = false,
     this.simulateScroll = true,
+    this.altScreenWheelFallback = AltScreenWheelFallback.scrollHistory,
   });
 
   /// The underlying terminal that this widget renders.
@@ -152,6 +154,10 @@ class TerminalView extends StatefulWidget {
   /// emulators. True by default.
   final bool simulateScroll;
 
+  /// Where the wheel goes on the alternate screen when the program did not ask
+  /// for it.
+  final AltScreenWheelFallback altScreenWheelFallback;
+
   @override
   State<TerminalView> createState() => TerminalViewState();
 }
@@ -254,6 +260,7 @@ class TerminalViewState extends State<TerminalView> {
     child = TerminalScrollGestureHandler(
       terminal: widget.terminal,
       simulateScroll: widget.simulateScroll,
+      altScreenWheelFallback: widget.altScreenWheelFallback,
       getCellOffset: getCellOffsetFromGlobal,
       getLineHeight: () => renderTerminal.lineHeight,
       child: child,

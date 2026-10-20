@@ -58,8 +58,9 @@ void main() {
 
     await tester.pump();
 
-    // Into the alt screen, as a TUI does on startup.
-    terminal.write('\x1b[?1049h');
+    // Into the alt screen, as a TUI does on startup, asking for the wheel — one
+    // that does not ask has its history scrolled instead.
+    terminal.write('\x1b[?1049h\x1b[?1000h');
 
     for (var lineNumber = 0; lineNumber < 12; lineNumber++) {
       terminal.write('line $lineNumber\r\n');

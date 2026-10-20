@@ -304,12 +304,14 @@ class Buffer {
     }
   }
 
-  /// Reports the scroll [scrollUp] is about to perform, while the rows it is
-  /// about to overwrite still hold their content — see [AltScreenScroll].
+  /// Reports a move of the alternate screen's rows before it happens, while
+  /// the rows it is about to overwrite or keep still hold their content — see
+  /// [AltScreenScroll].
   void _reportAltScreenScroll({
     required int regionTop,
     required int regionBottom,
     required int count,
+    bool isRetained = false,
   }) {
     if (count == 0) {
       return;
@@ -348,6 +350,7 @@ class Buffer {
       marginBottom: regionBottom,
       count: count,
       lines: lostLines,
+      isRetained: isRetained,
     );
 
     onScrolled(scroll);
@@ -363,7 +366,23 @@ class Buffer {
   void index() {
     if (isInVerticalMargin) {
       if (_cursorY == _marginBottom) {
-        if (marginTop == 0 && !isAltBuffer) {
+        // The line leaving the top is KEPT on both screens, so a full-screen
+        // program's output stays in the buffer, readable like any other. A
+        // region that starts lower keeps nothing: the rows above it never
+        // move, so no line leaves the screen.
+        if (marginTop == 0) {
+          // Reported BEFORE the add: at full capacity the add recycles the
+          // oldest line, and a host that tracks screen rows has no other sign
+          // that the screen moved, since the buffer's height no longer changes.
+          if (isAltBuffer) {
+            _reportAltScreenScroll(
+              regionTop: _marginTop,
+              regionBottom: _marginBottom,
+              count: 1,
+              isRetained: true,
+            );
+          }
+
           _addBlankLine(absoluteMarginBottom + 1);
         } else {
           scrollUp(1);
@@ -609,8 +628,12 @@ class Buffer {
     _cursorY = _cursorY.clamp(0, newHeight - 1);
 
     // 2. Adjust the width.
+    //
+    // The alternate screen rewraps like the main one. Its kept lines are
+    // output, and cutting them at a narrower width would lose text a copy needs;
+    // a program's own frame is repainted after the resize anyway.
     if (newWidth != oldWidth) {
-      if (terminal.reflowEnabled && !isAltBuffer) {
+      if (terminal.reflowEnabled) {
         final reflowResult = reflow(lines, oldWidth, newWidth);
 
         while (reflowResult.length < newHeight) {
