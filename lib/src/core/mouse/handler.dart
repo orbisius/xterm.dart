@@ -22,12 +22,17 @@ class TerminalMouseEvent {
   /// The platform of the terminal.
   final TerminalTargetPlatform platform;
 
+  /// True when the pointer moved to [position] with [button] held, rather
+  /// than [button] going down or up there.
+  final bool isMotion;
+
   TerminalMouseEvent({
     required this.button,
     required this.buttonState,
     required this.position,
     required this.state,
     required this.platform,
+    this.isMotion = false,
   });
 }
 
@@ -67,14 +72,17 @@ class ClickMouseHandler implements TerminalMouseHandler {
     switch (event.state.mouseMode) {
       case MouseMode.clickOnly:
         // Only clicks and only the first 3 buttons are reported.
-        if (event.buttonState == TerminalMouseButtonState.down &&
+        if (!event.isMotion &&
+            event.buttonState == TerminalMouseButtonState.down &&
             (event.button.id < 3)) {
-          return MouseReporter.report(
+          final report = MouseReporter.report(
             event.button,
             event.buttonState,
             event.position,
             event.state.mouseReportMode,
           );
+
+          return report;
         }
         return null;
       case MouseMode.none:
@@ -103,12 +111,20 @@ class UpDownMouseHandler implements TerminalMouseHandler {
             event.buttonState == TerminalMouseButtonState.up) {
           return null;
         }
-        return MouseReporter.report(
+
+        if (event.isMotion && !event.state.mouseMode.reportMotion) {
+          return null;
+        }
+
+        final report = MouseReporter.report(
           event.button,
           event.buttonState,
           event.position,
           event.state.mouseReportMode,
+          isMotion: event.isMotion,
         );
+
+        return report;
     }
   }
 }

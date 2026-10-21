@@ -6,14 +6,18 @@ enum MouseMode {
 
   upDownScroll(reportScroll: true),
 
-  upDownScrollDrag(reportScroll: true),
+  upDownScrollDrag(reportScroll: true, reportMotion: true),
 
-  upDownScrollMove(reportScroll: true),
+  upDownScrollMove(reportScroll: true, reportMotion: true),
   ;
 
-  const MouseMode({this.reportScroll = false});
+  const MouseMode({this.reportScroll = false, this.reportMotion = false});
 
   final bool reportScroll;
+
+  /// Whether moving the pointer with a button held is reported: 1002 and 1003
+  /// ask for it, while 1000 and 9 report presses and releases only.
+  final bool reportMotion;
 }
 
 /// https://terminalguide.namepad.de/mouse/
