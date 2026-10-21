@@ -351,19 +351,23 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
   bool mouseInput(
     TerminalMouseButton button,
     TerminalMouseButtonState buttonState,
-    CellOffset position,
-  ) {
+    CellOffset position, {
+    bool isMotion = false,
+  }) {
     final rowOnScreen = position.y - buffer.scrollBack;
     final clampedRowOnScreen = rowOnScreen.clamp(0, viewHeight - 1);
     final screenPosition = CellOffset(position.x, clampedRowOnScreen);
 
-    final output = mouseHandler?.call(TerminalMouseEvent(
+    final mouseEvent = TerminalMouseEvent(
       button: button,
       buttonState: buttonState,
       position: screenPosition,
       state: this,
       platform: platform,
-    ));
+      isMotion: isMotion,
+    );
+
+    final output = mouseHandler?.call(mouseEvent);
     if (output != null) {
       onOutput?.call(output);
       return true;
@@ -398,7 +402,10 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
 
   @override
   String toString() {
-    return 'Terminal(#$hashCode, $_viewWidth x $_viewHeight, ${_buffer.height} lines)';
+    final description =
+        'Terminal(#$hashCode, $_viewWidth x $_viewHeight, ${_buffer.height} lines)';
+
+    return description;
   }
 
   /* Handlers */
