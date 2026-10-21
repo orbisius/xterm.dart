@@ -107,9 +107,11 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
       return false;
     }
 
-    final isShiftHeld = HardwareKeyboard.instance.isShiftPressed;
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      return false;
+    }
 
-    return !isShiftHeld;
+    return true;
   }
 
   bool _tapDown(
@@ -119,8 +121,10 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
     bool forceCallback = false,
   }) {
     // Check if the terminal should and can handle the tap down event.
+    final shouldSendTap = _shouldSendPointerInput(PointerInput.tap);
+
     var handled = false;
-    if (_shouldSendPointerInput(PointerInput.tap)) {
+    if (shouldSendTap) {
       handled = renderTerminal.mouseEvent(
         button,
         TerminalMouseButtonState.down,
@@ -142,8 +146,10 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
     bool forceCallback = false,
   }) {
     // Check if the terminal should and can handle the tap up event.
+    final shouldSendTap = _shouldSendPointerInput(PointerInput.tap);
+
     var handled = false;
-    if (_shouldSendPointerInput(PointerInput.tap)) {
+    if (shouldSendTap) {
       handled = renderTerminal.mouseEvent(
         button,
         TerminalMouseButtonState.up,
@@ -285,7 +291,9 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
   /// over, a press the tap already reported is released here, so the program
   /// is not left holding a button while the terminal selects.
   bool _startDragInProgram(Offset position) {
-    if (!_shouldSendPointerInput(PointerInput.drag)) {
+    final shouldSendDrag = _shouldSendPointerInput(PointerInput.drag);
+
+    if (!shouldSendDrag) {
       _releaseHeldButton();
 
       return false;
