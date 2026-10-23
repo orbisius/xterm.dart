@@ -74,6 +74,7 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
       onTapUp: widget.onTapUp,
       onSingleTapUp: onSingleTapUp,
       onTapDown: onTapDown,
+      onRepeatTapDown: onRepeatTapDown,
       onSecondaryTapDown: onSecondaryTapDown,
       onSecondaryTapUp: onSecondaryTapUp,
       onTertiaryTapDown: onSecondaryTapDown,
@@ -119,9 +120,10 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
     TapDownDetails details,
     TerminalMouseButton button, {
     bool forceCallback = false,
+    PointerInput input = PointerInput.tap,
   }) {
     // Check if the terminal should and can handle the tap down event.
-    final shouldSendTap = _shouldSendPointerInput(PointerInput.tap);
+    final shouldSendTap = _shouldSendPointerInput(input);
 
     var handled = false;
     if (shouldSendTap) {
@@ -162,7 +164,10 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
     }
   }
 
-  void onTapDown(TapDownDetails details) {
+  void onTapDown(
+    TapDownDetails details, {
+    PointerInput input = PointerInput.tap,
+  }) {
     // onTapDown is special, as it will always call the supplied callback.
     // The TerminalView depends on it to bring the terminal into focus.
     final handled = _tapDown(
@@ -170,11 +175,19 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
       details,
       TerminalMouseButton.left,
       forceCallback: true,
+      input: input,
     );
 
     // A new press starts over, so a cell left by an earlier gesture is stale.
     _heldButtonCell =
         handled ? renderTerminal.getCellOffset(details.localPosition) : null;
+  }
+
+  /// A press that repeats a click reaches the program only when the host hands
+  /// over [PointerInput.repeatTap]; kept, it acts as if no program had asked
+  /// for the mouse.
+  void onRepeatTapDown(TapDownDetails details) {
+    onTapDown(details, input: PointerInput.repeatTap);
   }
 
   void onSingleTapUp(TapUpDetails details) {

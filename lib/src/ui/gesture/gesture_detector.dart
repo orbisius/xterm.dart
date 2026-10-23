@@ -10,6 +10,7 @@ class TerminalGestureDetector extends StatefulWidget {
     this.onSingleTapUp,
     this.onTapUp,
     this.onTapDown,
+    this.onRepeatTapDown,
     this.onSecondaryTapDown,
     this.onSecondaryTapUp,
     this.onTertiaryTapDown,
@@ -30,7 +31,14 @@ class TerminalGestureDetector extends StatefulWidget {
 
   final GestureTapUpCallback? onSingleTapUp;
 
+  /// The first press of a run of clicks; a press that repeats a click goes to
+  /// [onRepeatTapDown] instead.
   final GestureTapDownCallback? onTapDown;
+
+  /// A press within [kDoubleTapTimeout] and [kDoubleTapSlop] of the last
+  /// click's release: the second press of a double click, and each press after
+  /// it in the same run.
+  final GestureTapDownCallback? onRepeatTapDown;
 
   final GestureTapDownCallback? onSecondaryTapDown;
 
@@ -73,21 +81,40 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
   // subsequent tap up / tap hold of the same tap.
   bool _isDoubleTap = false;
 
+  // True if the last tap up ended a double tap. A press in the window it opens
+  // repeats the click without making a second double tap.
+  bool _isLastTapDouble = false;
+
+  @override
+  void dispose() {
+    _doubleTapTimer?.cancel();
+    super.dispose();
+  }
+
   // The down handler is force-run on success of a single tap and optimistically
   // run before a long press success.
   void _handleTapDown(TapDownDetails details) {
-    widget.onTapDown?.call(details);
+    final isRepeatTap = _doubleTapTimer != null &&
+        _isWithinDoubleTapTolerance(details.globalPosition);
 
-    if (_doubleTapTimer != null &&
-        _isWithinDoubleTapTolerance(details.globalPosition)) {
-      // If there was already a previous tap, the second down hold/tap is a
-      // double tap down.
+    if (isRepeatTap) {
+      widget.onRepeatTapDown?.call(details);
+    } else {
+      widget.onTapDown?.call(details);
+    }
+
+    // If there was already a previous tap, the second down hold/tap is a
+    // double tap down; the press after a double tap only carries its run on.
+    if (isRepeatTap && !_isLastTapDouble) {
       widget.onDoubleTapDown?.call(details);
 
-      _doubleTapTimer!.cancel();
-      _doubleTapTimeout();
       _isDoubleTap = true;
     }
+
+    // Every press closes the window, so a timer left by an earlier click can
+    // never close the one this click's release opens.
+    _doubleTapTimer?.cancel();
+    _doubleTapTimeout();
   }
 
   void _handleTapUp(TapUpDetails details) {
@@ -95,11 +122,15 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
       widget.onDoubleTapUp?.call(details);
     } else {
       widget.onSingleTapUp?.call(details);
-      _lastTapOffset = details.globalPosition;
-      _doubleTapTimer = Timer(kDoubleTapTimeout, _doubleTapTimeout);
     }
 
+    _isLastTapDouble = _isDoubleTap;
     _isDoubleTap = false;
+
+    // A double tap's release opens the window too, so a click after a double
+    // click still repeats it.
+    _lastTapOffset = details.globalPosition;
+    _doubleTapTimer = Timer(kDoubleTapTimeout, _doubleTapTimeout);
   }
 
   void _doubleTapTimeout() {
