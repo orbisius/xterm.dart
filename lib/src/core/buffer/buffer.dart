@@ -205,6 +205,10 @@ class Buffer {
   void eraseDisplayToCursor() {
     eraseLineToCursor();
 
+    // Everything above the cursor is erased, so no line runs into the cursor's
+    // row any more.
+    currentLine.isWrapped = false;
+
     for (var i = 0; i < _cursorY; i++) {
       final line = lines[i + scrollBack];
       line.isWrapped = false;
@@ -224,20 +228,7 @@ class Buffer {
   /// Erases the line from the cursor to the end of the line, including the
   /// cursor position.
   void eraseLineFromCursor() {
-    // The wrap flag records how this row BEGAN — that the row above it ran past
-    // the right margin into this one. Erasing the row's TAIL cannot change that,
-    // so only an erase starting at column 0, which replaces the row's
-    // beginning, clears it.
-    //
-    // Clearing it unconditionally loses a wrapped line for good: a full-screen
-    // program appends this erase to nearly every row it paints, so the terminal
-    // wraps a long line correctly and the very next escape sequence throws away
-    // the record that it did. [getText] then puts a newline in the middle of a
-    // line the screen shows as one.
-    if (_cursorX == 0) {
-      currentLine.isWrapped = false;
-    }
-
+    _endWrapIntoNextRow();
     currentLine.eraseRange(
       start: _cursorX,
       end: viewWidth,
@@ -247,15 +238,36 @@ class Buffer {
 
   /// Erases the line from the start of the line to the cursor, including the
   /// cursor.
+  ///
+  /// No wrap flag changes: the row's end is still there, so the row below still
+  /// follows on from it, and the row above still runs into it.
   void eraseLineToCursor() {
-    currentLine.isWrapped = false;
     currentLine.eraseRange(start: 0, end: _cursorX + 1, style: terminal.cursor);
   }
 
   /// Erases the line at the current cursor position.
   void eraseLine() {
-    currentLine.isWrapped = false;
+    _endWrapIntoNextRow();
     currentLine.eraseRange(start: 0, end: viewWidth, style: terminal.cursor);
+  }
+
+  /// Ends the line at the cursor's row, so the row below no longer continues
+  /// it. For an erase that reaches the right margin.
+  ///
+  /// [BufferLine.isWrapped] sits on the row that continues, so the wrap this
+  /// row's end made is the NEXT row's flag. The cursor row's own flag says the
+  /// row above ran into this one, and erasing this row cannot change that:
+  /// zsh redraws a wrapped command line by erasing the continuation row from
+  /// column 0, and clearing that row's flag would make [getText] put a newline
+  /// in the middle of a line the screen shows as one.
+  void _endWrapIntoNextRow() {
+    final nextLineIndex = absoluteCursorY + 1;
+
+    if (nextLineIndex >= lines.length) {
+      return;
+    }
+
+    lines[nextLineIndex].isWrapped = false;
   }
 
   /// Erases [count] cells starting at the cursor position.
