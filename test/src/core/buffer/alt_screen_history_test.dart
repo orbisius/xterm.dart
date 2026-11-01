@@ -33,6 +33,22 @@ void writeLines({
   }
 }
 
+/// Draws `<prefix> 0` … `<prefix> <rowCount - 1>` on the screen's top rows the
+/// way a full-screen program paints a frame — each row placed by a cursor move,
+/// no line feed — then leaves the cursor on screen row [cursorRow].
+void writeFrame({
+  required Terminal terminal,
+  required String prefix,
+  required int rowCount,
+  required int cursorRow,
+}) {
+  for (var row = 0; row < rowCount; row++) {
+    terminal.write('\x1b[${row + 1};1H\x1b[2K$prefix $row');
+  }
+
+  terminal.write('\x1b[${cursorRow + 1};1H');
+}
+
 /// The text of buffer row [row], without the grid's unused tail.
 String readRowText({required Terminal terminal, required int row}) {
   final line = terminal.buffer.lines[row];
@@ -202,6 +218,131 @@ void main() {
       final screenText = readJoinedRows(terminal: terminal, firstRow: 0);
 
       expect(screenText, thirtyCharacterText);
+    });
+  });
+
+  // A resize rebuilds the screen, and the program repaints it afterwards. The
+  // rows the new size no longer fits are a copy of an old frame, not output, so
+  // they are dropped, as iTerm2 does; kept in the history, every split or font
+  // zoom would stack another stale frame above the program's real output.
+  group('a resize drops the screen rows it no longer fits', () {
+    test('a shorter screen drops its frame instead of keeping it', () {
+      final terminal = buildAltTerminal();
+
+      writeFrame(terminal: terminal, prefix: 'old', rowCount: 10, cursorRow: 9);
+
+      terminal.resize(40, 4);
+
+      writeFrame(terminal: terminal, prefix: 'new', rowCount: 4, cursorRow: 3);
+
+      expect(terminal.buffer.scrollBack, 0);
+      expect(terminal.buffer.height, 4);
+      expect(readRowText(terminal: terminal, row: 0), 'new 0');
+    });
+
+    test('a shorter screen keeps the history it had and the cursor row', () {
+      final terminal = buildAltTerminal();
+
+      writeLines(terminal: terminal, prefix: 'line', count: 15);
+
+      terminal.resize(40, 6);
+
+      expect(terminal.buffer.scrollBack, 5, reason: 'line 0 to line 4');
+      expect(readRowText(terminal: terminal, row: 4), 'line 4');
+      expect(readRowText(terminal: terminal, row: 5), 'line 9');
+      expect(readRowText(terminal: terminal, row: 10), 'line 14');
+      expect(terminal.buffer.cursorY, 5);
+    });
+
+    test('a narrower screen drops the rows its rewrap no longer fits', () {
+      final terminal = buildAltTerminal();
+
+      for (var row = 0; row < 10; row++) {
+        terminal.write('\x1b[${row + 1};1H$row$thirtyCharacterText');
+      }
+
+      terminal.resize(20, 10);
+
+      final lastRowText = readJoinedRows(terminal: terminal, firstRow: 8);
+
+      expect(terminal.buffer.scrollBack, 0);
+      expect(lastRowText, '9$thirtyCharacterText');
+      expect(
+        terminal.buffer.cursorX,
+        11,
+        reason: 'the cursor stays after the last character, on its new row',
+      );
+      expect(terminal.buffer.cursorY, 9);
+    });
+
+    // Blank rows below the cursor are room, not content: a rewrap fills them
+    // before it drops anything a program drew.
+    test('a narrower screen fills the blank rows before it drops any', () {
+      final terminal = buildAltTerminal();
+
+      for (var row = 0; row < 3; row++) {
+        terminal.write('\x1b[${row + 1};1H$row$thirtyCharacterText');
+      }
+
+      terminal.resize(20, 10);
+
+      final firstRowText = readJoinedRows(terminal: terminal, firstRow: 0);
+
+      expect(terminal.buffer.scrollBack, 0);
+      expect(firstRowText, '0$thirtyCharacterText');
+    });
+
+    // Growing the screen into the history would hand kept output to the
+    // program to paint over, so a later shrink would drop it for good.
+    test('a taller screen keeps the history as history', () {
+      final terminal = buildAltTerminal();
+
+      writeLines(terminal: terminal, prefix: 'line', count: 15);
+
+      terminal.resize(40, 12);
+
+      expect(terminal.buffer.scrollBack, 5, reason: 'line 0 to line 4');
+      expect(readRowText(terminal: terminal, row: 5), 'line 5');
+      expect(readRowText(terminal: terminal, row: 14), 'line 14');
+      expect(terminal.buffer.cursorY, 9);
+    });
+
+    // A kept line whose end ran onto the screen is output: the rows dropped
+    // must come from below it, or the copy loses a line it showed.
+    test('a kept line that ran onto the screen stays whole', () {
+      final terminal = buildAltTerminal();
+
+      const wideText = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+          'BBBBBBBBBBBBBBBBBBBB';
+
+      terminal.write('$wideText\r\n');
+
+      writeLines(terminal: terminal, prefix: 'after', count: 9);
+
+      expect(
+        terminal.buffer.scrollBack,
+        1,
+        reason: 'the line starts above the screen and ends on its first row',
+      );
+
+      terminal.resize(80, 5);
+
+      expect(terminal.buffer.scrollBack, 1);
+      expect(readRowText(terminal: terminal, row: 0), wideText);
+      expect(readRowText(terminal: terminal, row: 1), 'after 4');
+      expect(readRowText(terminal: terminal, row: 5), 'after 8');
+    });
+
+    test('the main screen still keeps what a resize moves off its top', () {
+      final terminal = Terminal(maxLines: 100);
+
+      terminal.resize(40, 10);
+      writeLines(terminal: terminal, prefix: 'line', count: 10);
+
+      terminal.resize(40, 6);
+
+      expect(terminal.buffer.scrollBack, 4);
+      expect(readRowText(terminal: terminal, row: 0), 'line 0');
     });
   });
 
