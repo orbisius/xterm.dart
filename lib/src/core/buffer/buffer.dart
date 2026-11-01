@@ -602,6 +602,16 @@ class Buffer {
   }
 
   void resize(int oldWidth, int oldHeight, int newWidth, int newHeight) {
+    if (isAltBuffer) {
+      _resizeAltScreen(
+        oldWidth: oldWidth,
+        newWidth: newWidth,
+        newHeight: newHeight,
+      );
+
+      return;
+    }
+
     // 1. Adjust the height.
     if (newHeight > oldHeight) {
       // Grow larger
@@ -628,23 +638,129 @@ class Buffer {
     _cursorY = _cursorY.clamp(0, newHeight - 1);
 
     // 2. Adjust the width.
-    //
-    // The alternate screen rewraps like the main one. Its kept lines are
-    // output, and cutting them at a narrower width would lose text a copy needs;
-    // a program's own frame is repainted after the resize anyway.
-    if (newWidth != oldWidth) {
-      if (terminal.reflowEnabled) {
-        final reflowResult = reflow(lines, oldWidth, newWidth);
+    _resizeWidth(
+      oldWidth: oldWidth,
+      newWidth: newWidth,
+      newHeight: newHeight,
+    );
+  }
 
-        while (reflowResult.length < newHeight) {
-          reflowResult.add(_newEmptyLine(newWidth));
-        }
+  /// Rewraps every line to [newWidth] when reflow is enabled, else resizes each
+  /// line in place, and leaves at least [newHeight] lines.
+  void _resizeWidth({
+    required int oldWidth,
+    required int newWidth,
+    required int newHeight,
+  }) {
+    if (newWidth == oldWidth) {
+      return;
+    }
 
-        lines.replaceWith(reflowResult);
-      } else {
-        lines.forEach((item) => item.resize(newWidth));
+    if (terminal.reflowEnabled) {
+      final reflowResult = reflow(lines, oldWidth, newWidth);
+
+      while (reflowResult.length < newHeight) {
+        reflowResult.add(_newEmptyLine(newWidth));
+      }
+
+      lines.replaceWith(reflowResult);
+    } else {
+      for (var row = 0; row < lines.length; row++) {
+        lines[row].resize(newWidth);
       }
     }
+  }
+
+  /// Resizes the alternate screen: its rows in use are rewrapped, the ones the
+  /// new size no longer fits are dropped from its top, and the lines kept above
+  /// the screen stay where they are.
+  ///
+  /// A full-screen program repaints after a resize, so the dropped rows are an
+  /// old copy of its screen, not output. Moved above the screen, as the main
+  /// screen moves its rows, they would stack a stale frame there on every
+  /// resize.
+  void _resizeAltScreen({
+    required int oldWidth,
+    required int newWidth,
+    required int newHeight,
+  }) {
+    // The screen's first row and the cursor are anchored so they can be found
+    // again once the rewrap has moved them. The cursor's anchor takes the raw
+    // column, which is one past the last one while a wrap is pending.
+    final screenTopAnchor = createAnchor(0, scrollBack);
+    final cursorAnchor = createAnchor(_cursorX, absoluteCursorY);
+
+    // Kept lines are output, and cutting them at a narrower width would lose
+    // text a copy needs, so the alternate screen rewraps like the main one.
+    _resizeWidth(
+      oldWidth: oldWidth,
+      newWidth: newWidth,
+      newHeight: newHeight,
+    );
+
+    // A rewrap that outgrows [maxLines] drops lines from the top; the screen
+    // then starts at the first line left.
+    var firstScreenRow = 0;
+
+    if (screenTopAnchor.attached) {
+      firstScreenRow = screenTopAnchor.y;
+
+      // The screen's first row continued a kept line, and the rewrap joined it
+      // onto a row that starts with kept output. That row stays kept, so the
+      // screen starts below it.
+      if (screenTopAnchor.x > 0) {
+        firstScreenRow++;
+      }
+    }
+
+    final cursorRow = cursorAnchor.attached ? cursorAnchor.y : 0;
+    final cursorColumn = cursorAnchor.x;
+
+    screenTopAnchor.dispose();
+    cursorAnchor.dispose();
+
+    // The rows in use run down to the cursor or to the last row with content,
+    // whichever is lower. The blank rows below them are room, so a rewrap fills
+    // them before it drops a row a program drew.
+    var usedRowsEnd = max(cursorRow + 1, firstScreenRow);
+
+    for (var row = lines.length - 1; row >= usedRowsEnd; row--) {
+      if (lines[row].getTrimmedLength(newWidth) > 0) {
+        usedRowsEnd = row + 1;
+        break;
+      }
+    }
+
+    final usedRowCount = usedRowsEnd - firstScreenRow;
+    var droppedRowCount = 0;
+
+    if (usedRowCount > newHeight) {
+      droppedRowCount = usedRowCount - newHeight;
+      lines.remove(firstScreenRow, droppedRowCount);
+
+      // The row now first on the screen may continue a line whose start was
+      // dropped. Joined to the kept line above it, it would copy as part of a
+      // line it never belonged to.
+      lines[firstScreenRow].isWrapped = false;
+    }
+
+    // Past the rows in use, every row is blank: the extra ones go, and the
+    // missing ones are added at the bottom.
+    final screenEnd = firstScreenRow + newHeight;
+    final missingRowCount = screenEnd - lines.length;
+
+    if (missingRowCount < 0) {
+      lines.remove(screenEnd, -missingRowCount);
+    }
+
+    for (var added = 0; added < missingRowCount; added++) {
+      lines.push(_newEmptyLine(newWidth));
+    }
+
+    final screenCursorRow = cursorRow - droppedRowCount - firstScreenRow;
+
+    _cursorX = cursorColumn.clamp(0, newWidth - 1);
+    _cursorY = screenCursorRow.clamp(0, newHeight - 1);
   }
 
   /// Create a new [CellAnchor] at the specified [x] and [y] coordinates.
