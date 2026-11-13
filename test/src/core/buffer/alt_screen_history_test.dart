@@ -1,5 +1,6 @@
 import 'package:test/test.dart';
 import 'package:xterm/core.dart';
+import 'package:xterm/ui.dart';
 
 const altScreenOn = '\x1b[?1049h';
 
@@ -343,6 +344,130 @@ void main() {
 
       expect(terminal.buffer.scrollBack, 4);
       expect(readRowText(terminal: terminal, row: 0), 'line 0');
+    });
+  });
+
+  // A pane split or a monitor change resizes the terminal while something is
+  // selected. The selection's rows stay, above the screen when they no longer
+  // fit, so the highlight survives and a copy still reads what was chosen.
+  group('a resize keeps the rows a selection sits on', () {
+    test("a shrink keeps the rows from the selection's row down", () {
+      final terminal = buildAltTerminal();
+      final controller = TerminalController();
+
+      writeFrame(terminal: terminal, prefix: 'old', rowCount: 10, cursorRow: 9);
+
+      final buffer = terminal.buffer;
+
+      controller.setSelection(
+        buffer.createAnchor(0, 2),
+        buffer.createAnchor(5, 3),
+      );
+
+      terminal.resize(40, 4);
+
+      final selection = controller.selection;
+
+      expect(selection, isNotNull, reason: 'its anchors are still attached');
+      expect(selection?.begin.y, 0);
+      expect(selection?.end.y, 1);
+      expect(
+        terminal.buffer.scrollBack,
+        4,
+        reason: 'old 2 to old 5 sit above the screen',
+      );
+      expect(readRowText(terminal: terminal, row: 0), 'old 2');
+      expect(readRowText(terminal: terminal, row: 4), 'old 6');
+      expect(terminal.buffer.cursorY, 3);
+    });
+
+    // The rewrap moves each anchor onto the row its text lands on, and the
+    // drop stops there, not at the row the anchor sat on before.
+    test("a narrower screen keeps the selection's rewrapped rows", () {
+      final terminal = buildAltTerminal();
+      final controller = TerminalController();
+
+      for (var row = 0; row < 10; row++) {
+        terminal.write('\x1b[${row + 1};1H$row$thirtyCharacterText');
+      }
+
+      final buffer = terminal.buffer;
+
+      controller.setSelection(
+        buffer.createAnchor(0, 1),
+        buffer.createAnchor(10, 1),
+      );
+
+      terminal.resize(20, 10);
+
+      final selection = controller.selection;
+
+      expect(selection, isNotNull, reason: 'its anchors are still attached');
+      expect(selection?.begin.y, 0);
+      expect(terminal.buffer.scrollBack, 8);
+      expect(
+        readJoinedRows(terminal: terminal, firstRow: 0),
+        '1$thirtyCharacterText',
+      );
+    });
+
+    test('a selection still on the new screen changes nothing', () {
+      final terminal = buildAltTerminal();
+      final controller = TerminalController();
+
+      writeFrame(terminal: terminal, prefix: 'old', rowCount: 10, cursorRow: 9);
+
+      final buffer = terminal.buffer;
+
+      controller.setSelection(
+        buffer.createAnchor(0, 8),
+        buffer.createAnchor(5, 9),
+      );
+
+      terminal.resize(40, 4);
+
+      final selection = controller.selection;
+
+      expect(terminal.buffer.scrollBack, 0);
+      expect(readRowText(terminal: terminal, row: 0), 'old 6');
+      expect(selection?.begin.y, 2);
+    });
+
+    // A host keeps anchors of its own, such as where a later Shift+click
+    // reaches from. Keeping their rows would bring the old frame back after
+    // almost any click.
+    test("an anchor that is not a selection's keeps nothing", () {
+      final terminal = buildAltTerminal();
+
+      writeFrame(terminal: terminal, prefix: 'old', rowCount: 10, cursorRow: 9);
+
+      final anchor = terminal.buffer.createAnchor(0, 2);
+
+      terminal.resize(40, 4);
+
+      expect(terminal.buffer.scrollBack, 0);
+      expect(readRowText(terminal: terminal, row: 0), 'old 6');
+      expect(anchor.attached, isFalse, reason: 'its row was dropped');
+    });
+
+    test('a cleared selection keeps nothing', () {
+      final terminal = buildAltTerminal();
+      final controller = TerminalController();
+
+      writeFrame(terminal: terminal, prefix: 'old', rowCount: 10, cursorRow: 9);
+
+      final buffer = terminal.buffer;
+
+      controller.setSelection(
+        buffer.createAnchor(0, 2),
+        buffer.createAnchor(5, 3),
+      );
+      controller.clearSelection();
+
+      terminal.resize(40, 4);
+
+      expect(terminal.buffer.scrollBack, 0);
+      expect(readRowText(terminal: terminal, row: 0), 'old 6');
     });
   });
 

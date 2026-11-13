@@ -37,6 +37,17 @@ class BufferLine with IndexedItem {
 
   List<CellAnchor> get anchors => _anchors;
 
+  /// Whether an anchor on this line asks to keep it, see [CellAnchor.keepsLine].
+  bool get isKeptByAnchor {
+    for (final anchor in _anchors) {
+      if (anchor.keepsLine) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   int getForeground(int index) {
     return _data[index * _cellSize + _cellForeground];
   }
@@ -464,6 +475,11 @@ class CellAnchor {
   BufferLine? _owner;
 
   BufferLine? get line => _owner;
+
+  /// Whether the alternate screen keeps this anchor's line when a resize would
+  /// drop it. False by default, so an anchor a host keeps for its own use never
+  /// holds an old frame's rows.
+  bool keepsLine = false;
 
   bool get attached => _owner?.attached ?? false;
 

@@ -672,13 +672,16 @@ class Buffer {
   }
 
   /// Resizes the alternate screen: its rows in use are rewrapped, the ones the
-  /// new size no longer fits are dropped from its top, and the lines kept above
-  /// the screen stay where they are.
+  /// new size no longer fits are dropped from its top up to the first row an
+  /// anchor keeps ([CellAnchor.keepsLine]), and the lines kept above the screen
+  /// stay where they are.
   ///
   /// A full-screen program repaints after a resize, so the dropped rows are an
   /// old copy of its screen, not output. Moved above the screen, as the main
   /// screen moves its rows, they would stack a stale frame there on every
-  /// resize.
+  /// resize. A selection is the exception: deleting its rows would delete it
+  /// while the user still holds it, so they stay, above the screen when they no
+  /// longer fit.
   void _resizeAltScreen({
     required int oldWidth,
     required int newWidth,
@@ -732,10 +735,20 @@ class Buffer {
     }
 
     final usedRowCount = usedRowsEnd - firstScreenRow;
+    final overflowRowCount = usedRowCount - newHeight;
     var droppedRowCount = 0;
 
-    if (usedRowCount > newHeight) {
-      droppedRowCount = usedRowCount - newHeight;
+    while (droppedRowCount < overflowRowCount) {
+      final line = lines[firstScreenRow + droppedRowCount];
+
+      if (line.isKeptByAnchor) {
+        break;
+      }
+
+      droppedRowCount++;
+    }
+
+    if (droppedRowCount > 0) {
       lines.remove(firstScreenRow, droppedRowCount);
 
       // The row now first on the screen may continue a line whose start was
@@ -744,9 +757,15 @@ class Buffer {
       lines[firstScreenRow].isWrapped = false;
     }
 
+    // The rows a drop stopped short of keeping push the screen down: they stay
+    // above it, and the screen is the last rows in use.
+    final keptRowCount = usedRowCount - droppedRowCount;
+    final int keptAboveRowCount = max(0, keptRowCount - newHeight);
+    final screenTop = firstScreenRow + keptAboveRowCount;
+
     // Past the rows in use, every row is blank: the extra ones go, and the
     // missing ones are added at the bottom.
-    final screenEnd = firstScreenRow + newHeight;
+    final screenEnd = screenTop + newHeight;
     final missingRowCount = screenEnd - lines.length;
 
     if (missingRowCount < 0) {
@@ -757,7 +776,7 @@ class Buffer {
       lines.push(_newEmptyLine(newWidth));
     }
 
-    final screenCursorRow = cursorRow - droppedRowCount - firstScreenRow;
+    final screenCursorRow = cursorRow - droppedRowCount - screenTop;
 
     _cursorX = cursorColumn.clamp(0, newWidth - 1);
     _cursorY = screenCursorRow.clamp(0, newHeight - 1);

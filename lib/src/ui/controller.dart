@@ -78,12 +78,17 @@ class TerminalController with ChangeNotifier {
   /// Set selection on the terminal from [base] to [extent]. This method takes
   /// the ownership of [base] and [extent] and will dispose them when the
   /// selection is cleared or changed.
+  ///
+  /// Both anchors keep their lines ([CellAnchor.keepsLine]), so a resize of the
+  /// alternate screen leaves the selection in place instead of deleting it.
   void setSelection(CellAnchor base, CellAnchor extent, {SelectionMode? mode}) {
     _selectionBase?.dispose();
     _selectionBase = base;
+    base.keepsLine = true;
 
     _selectionExtent?.dispose();
     _selectionExtent = extent;
+    extent.keepsLine = true;
 
     if (mode != null) {
       _selectionMode = mode;
