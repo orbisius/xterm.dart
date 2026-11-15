@@ -111,11 +111,37 @@ class Buffer {
     codePoint = charset.translate(codePoint);
 
     final cellWidth = unicodeV11.wcwidth(codePoint);
-    if (_cursorX >= terminal.viewWidth) {
-      index();
-      setCursorX(0);
+
+    // A wide character needs two cells, so it does not fit in the last column
+    // either.
+    final isPastMargin = _cursorX >= terminal.viewWidth ||
+        (cellWidth == 2 && _cursorX == terminal.viewWidth - 1);
+
+    if (isPastMargin) {
       if (terminal.autoWrapMode) {
+        // A wide character moves to the next row whole, as in xterm, and the
+        // cell it leaves is cleared, so no stale character sits between the
+        // two halves of the line.
+        if (_cursorX < terminal.viewWidth) {
+          currentLine.eraseRange(
+            start: _cursorX,
+            end: terminal.viewWidth,
+            style: terminal.cursor,
+          );
+        }
+
+        index();
+        setCursorX(0);
         currentLine.isWrapped = true;
+      } else {
+        // With autowrap off (DECAWM) nothing moves past the margin: the last
+        // column is written over, and a wide character that cannot fit is
+        // dropped, as xterm does.
+        if (cellWidth == 2) {
+          return;
+        }
+
+        setCursorX(terminal.viewWidth - 1);
       }
     }
 

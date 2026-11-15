@@ -480,4 +480,65 @@ void main() {
       expect(writtenLines.length, greaterThan(1));
     });
   });
+
+  group('Buffer.writeChar() at the right margin', () {
+    test('moves a wide character in the last column to the next row', () {
+      final terminal = Terminal();
+      terminal.resize(10, 5);
+
+      terminal.write('${'a' * 9}中b');
+
+      expect(terminal.buffer.lines[0].toString(), 'a' * 9);
+      expect(terminal.buffer.lines[1].toString(), '中b');
+      expect(terminal.buffer.lines[1].isWrapped, isTrue);
+      expect(terminal.buffer.getText().split('\n').first, '${'a' * 9}中b');
+    });
+
+    test('clears what the last cell held when a wide character wraps', () {
+      final terminal = Terminal();
+      terminal.resize(10, 5);
+
+      terminal.write('${'x' * 10}\r${'a' * 9}中');
+
+      expect(terminal.buffer.lines[0].toString(), 'a' * 9);
+      expect(terminal.buffer.lines[1].toString(), '中');
+    });
+
+    test('keeps a wrapped wide character whole when the view widens', () {
+      final terminal = Terminal();
+      terminal.resize(10, 5);
+
+      terminal.write('${'a' * 9}中b');
+      terminal.resize(20, 5);
+
+      final line = terminal.buffer.lines[0];
+
+      // Read by cell, not by text: an empty cell left between the halves is a
+      // visible gap that the text read skips.
+      expect(line.getCodePoint(9), '中'.codeUnitAt(0));
+      expect(line.getWidth(9), 2);
+      expect(line.getCodePoint(11), 'b'.codeUnitAt(0));
+    });
+
+    test('writes over the last column with autowrap off', () {
+      final terminal = Terminal();
+      terminal.resize(10, 5);
+
+      terminal.write('\x1b[?7l${'a' * 9}XYZ');
+
+      expect(terminal.buffer.lines[0].toString(), '${'a' * 9}Z');
+      expect(terminal.buffer.lines[1].toString(), '');
+      expect(terminal.buffer.cursorY, 0);
+    });
+
+    test('drops a wide character that cannot fit with autowrap off', () {
+      final terminal = Terminal();
+      terminal.resize(10, 5);
+
+      terminal.write('\x1b[?7l${'a' * 9}中b');
+
+      expect(terminal.buffer.lines[0].toString(), '${'a' * 9}b');
+      expect(terminal.buffer.lines[1].toString(), '');
+    });
+  });
 }
