@@ -137,6 +137,14 @@ class TerminalPainter {
     );
   }
 
+  /// Marks a background code read from an inverse cell's FOREGROUND, which
+  /// resolves through [resolveForegroundColor]. It sits above the color type
+  /// bits ([CellColor.typeMask]), so no stored color has it set.
+  static const _inverseBackgroundBit = 1 << 27;
+
+  /// The background code of a cell that paints no background.
+  static const _noBackgroundCode = -1;
+
   /// Paints [line] to [canvas] at [offset]. The x offset of [offset] is usually
   /// 0, and the y offset is the top of the line.
   void paintLine(
@@ -144,6 +152,8 @@ class TerminalPainter {
     Offset offset,
     BufferLine line,
   ) {
+    _paintLineBackgrounds(canvas, offset, line);
+
     final cellData = CellData.empty();
     final cellWidth = _cellSize.width;
 
@@ -153,12 +163,113 @@ class TerminalPainter {
       final charWidth = cellData.content >> CellContent.widthShift;
       final cellOffset = offset.translate(i * cellWidth, 0);
 
-      paintCell(canvas, cellOffset, cellData);
+      paintCellForeground(canvas, cellOffset, cellData);
 
       if (charWidth == 2) {
         i++;
       }
     }
+  }
+
+  /// Paints the backgrounds of [line], one rectangle per run of adjacent cells
+  /// that share a color, before any of the line's text.
+  ///
+  /// Per run, not per cell: a program with its own color scheme gives every
+  /// cell a background, and a rectangle per cell is tens of thousands of draw
+  /// calls a frame. With every background down first, a glyph that reaches
+  /// past its cell is no longer covered by the next cell's background.
+  void _paintLineBackgrounds(Canvas canvas, Offset offset, BufferLine line) {
+    final lineLength = line.length;
+
+    var runStart = 0;
+    var runCode = _noBackgroundCode;
+
+    for (var i = 0; i < lineLength; i++) {
+      final cellCode = _readBackgroundCode(line, i);
+
+      if (cellCode != runCode) {
+        _paintBackgroundRun(
+          canvas,
+          offset,
+          code: runCode,
+          start: runStart,
+          end: i,
+        );
+
+        runStart = i;
+        runCode = cellCode;
+      }
+
+      // A wide character's background covers both of its cells, whatever the
+      // second one holds.
+      if (line.getWidth(i) == 2) {
+        i++;
+      }
+    }
+
+    _paintBackgroundRun(
+      canvas,
+      offset,
+      code: runCode,
+      start: runStart,
+      end: lineLength,
+    );
+  }
+
+  /// One int for the color a cell's background paints: two cells with the same
+  /// code paint the same color. An inverse cell paints its foreground, marked
+  /// with [_inverseBackgroundBit]; a cell on the default background paints
+  /// nothing.
+  int _readBackgroundCode(BufferLine line, int index) {
+    final isInverse = line.getAttributes(index) & CellFlags.inverse != 0;
+
+    if (isInverse) {
+      final inverseCode = line.getForeground(index) | _inverseBackgroundBit;
+
+      return inverseCode;
+    }
+
+    final background = line.getBackground(index);
+    final isDefaultBackground =
+        background & CellColor.typeMask == CellColor.normal;
+
+    if (isDefaultBackground) {
+      return _noBackgroundCode;
+    }
+
+    return background;
+  }
+
+  /// Paints the cells from [start] up to [end] in the color [code] names.
+  void _paintBackgroundRun(
+    Canvas canvas,
+    Offset offset, {
+    required int code,
+    required int start,
+    required int end,
+  }) {
+    if (code == _noBackgroundCode) {
+      return;
+    }
+
+    final isInverse = code & _inverseBackgroundBit != 0;
+    final Color color;
+
+    if (isInverse) {
+      color = resolveForegroundColor(code & ~_inverseBackgroundBit);
+    } else {
+      color = resolveBackgroundColor(code);
+    }
+
+    final paint = Paint()..color = color;
+    final left = offset.dx + start * _cellSize.width;
+
+    // One pixel wider than the cells, as a single cell's rectangle always was,
+    // so no seam shows where the next run's rectangle begins.
+    final width = (end - start) * _cellSize.width + 1;
+    final runRect = Rect.fromLTWH(left, offset.dy, width, _cellSize.height);
+
+    canvas.drawRect(runRect, paint);
   }
 
   @pragma('vm:prefer-inline')
@@ -173,6 +284,16 @@ class TerminalPainter {
   void paintCellForeground(Canvas canvas, Offset offset, CellData cellData) {
     final charCode = cellData.content & CellContent.codepointMask;
     if (charCode == 0) return;
+
+    // A space shows nothing but an underline: its paragraph carries no
+    // background. Text has one between every two words, and each paragraph is a
+    // draw call the raster thread still has to work through.
+    final isBlankSpace =
+        charCode == 0x20 && cellData.flags & CellFlags.underline == 0;
+
+    if (isBlankSpace) {
+      return;
+    }
 
     final cacheKey = cellData.getHash() ^ _textScaler.hashCode;
     var paragraph = _paragraphCache.getLayoutFromCache(cacheKey);
