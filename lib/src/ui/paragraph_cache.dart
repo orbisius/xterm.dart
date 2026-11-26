@@ -5,15 +5,19 @@ import 'package:quiver/collection.dart';
 
 /// A cache of laid out [Paragraph]s. This is used to avoid laying out the same
 /// text multiple times, which is expensive.
+///
+/// A key is any value with equality: a single cell's paragraph is keyed by an
+/// int, a run of text by a string that holds its whole style and text, so two
+/// different runs can never share a key.
 class ParagraphCache {
   ParagraphCache(int maximumSize)
-      : _cache = LruMap<int, Paragraph>(maximumSize: maximumSize);
+      : _cache = LruMap<Object, Paragraph>(maximumSize: maximumSize);
 
-  final LruMap<int, Paragraph> _cache;
+  final LruMap<Object, Paragraph> _cache;
 
   /// Returns a [Paragraph] for the given [key]. [key] is the same as the
   /// key argument to [performAndCacheLayout].
-  Paragraph? getLayoutFromCache(int key) {
+  Paragraph? getLayoutFromCache(Object key) {
     return _cache[key];
   }
 
@@ -24,7 +28,7 @@ class ParagraphCache {
     String text,
     TextStyle style,
     TextScaler textScaler,
-    int key,
+    Object key,
   ) {
     final builder = ParagraphBuilder(style.getParagraphStyle());
     builder.pushStyle(style.getTextStyle(textScaler: textScaler));
